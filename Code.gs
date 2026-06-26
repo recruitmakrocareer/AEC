@@ -47,7 +47,16 @@ function doGet(e) {
     result = { success: false, error: err.message };
   }
 
-  return ContentService.createTextOutput(JSON.stringify(result))
+  const json = JSON.stringify(result);
+
+  // JSONP support — เรียกผ่าน <script> tag เพื่อข้าม CORS จาก github.io
+  const callback = e && e.parameter && e.parameter.callback;
+  if (callback) {
+    return ContentService.createTextOutput(callback + '(' + json + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  return ContentService.createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
 }
 

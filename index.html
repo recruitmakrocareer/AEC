@@ -324,14 +324,31 @@
 // ─── GAS API URL — ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว ───
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz0q1jjZM1JIbS7XdNGVPqCXSVGTjsb5aQrQXVhKBcCRvs6O3umCkWZOWCevtP2VNSI/exec';
 
+// GET ใช้ JSONP (โหลดผ่าน <script>) เพื่อข้าม CORS ของ Google Apps Script
+let __jsonpId = 0;
 function gasGet(action, params) {
-  const qs = new URLSearchParams({ action, ...params }).toString();
-  return fetch(`${GAS_URL}?${qs}`).then(r => r.json());
+  return new Promise((resolve, reject) => {
+    const cb = '__jsonp_cb_' + (++__jsonpId) + '_' + Date.now();
+    const script = document.createElement('script');
+    const timer = setTimeout(() => { cleanup(); reject(new Error('หมดเวลาเชื่อมต่อ Server (timeout)')); }, 90000);
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cb];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cb] = function(data) { cleanup(); resolve(data); };
+    script.onerror = function() { cleanup(); reject(new Error('เชื่อมต่อ Server ไม่ได้ (ตรวจสอบสิทธิ์ Deploy = Anyone)')); };
+    const qs = new URLSearchParams({ action, ...params, callback: cb }).toString();
+    script.src = GAS_URL + '?' + qs;
+    document.body.appendChild(script);
+  });
 }
 
+// POST ใช้ fetch แบบ simple request (text/plain) เพื่อเลี่ยง CORS preflight
 function gasPost(action, data) {
   return fetch(GAS_URL, {
     method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action, data }),
   }).then(r => r.json());
 }
