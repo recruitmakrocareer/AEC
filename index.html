@@ -414,6 +414,18 @@ function login() {
         document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
         document.getElementById('vendor-target-section').style.display = 'none';
         document.getElementById('vendor-history-section').style.display = 'none';
+
+        // Auto-set date range: 1st of current month → today
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const firstOfMonth = `${yyyy}-${mm}-01`;
+        const today = `${yyyy}-${mm}-${dd}`;
+        const fsEl = document.getElementById('filterStart');
+        const feEl = document.getElementById('filterEnd');
+        if (fsEl && !fsEl.value) fsEl.value = firstOfMonth;
+        if (feEl && !feEl.value) feEl.value = today;
       }
 
       initAppData(true);
