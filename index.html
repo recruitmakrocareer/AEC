@@ -321,6 +321,21 @@
 </div><!-- end #app -->
 
 <script>
+// ─── GAS API URL — ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว ───
+const GAS_URL = 'YOUR_GAS_DEPLOYMENT_URL_HERE';
+
+function gasGet(action, params) {
+  const qs = new URLSearchParams({ action, ...params }).toString();
+  return fetch(`${GAS_URL}?${qs}`).then(r => r.json());
+}
+
+function gasPost(action, data) {
+  return fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, data }),
+  }).then(r => r.json());
+}
+
 // ─── State ───
 let currentEmail = '';
 let currentUser = null;
@@ -366,12 +381,12 @@ function login() {
   btn.innerText = 'กำลังเข้าสู่ระบบ...';
   status.innerText = '';
 
-  google.script.run
-    .withSuccessHandler(function(res) {
+  gasGet('login', { email })
+    .then(function(res) {
+      if (res.error) throw new Error(res.error);
       currentEmail = email;
       currentUser = res.user;
 
-      // Show UI immediately
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
       document.getElementById('userInfo').innerText = `ยินดีต้อนรับ: ${res.user.vendor}`;
@@ -384,20 +399,17 @@ function login() {
         document.getElementById('vendor-history-section').style.display = 'none';
       }
 
-      // Load all data — force refresh ครั้งแรกเพื่อ flush cache เก่า
       initAppData(true);
 
-      // Auto-refresh ทุก 60s (เพิ่มจาก 30s เพื่อลด timeout)
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
       autoRefreshTimer = setInterval(() => { if (currentEmail && !isLoading) initAppData(false); }, 60000);
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       status.innerText = '❌ ' + (err.message || err);
       status.style.color = '#dc2626';
       btn.disabled = false;
       btn.innerText = 'เข้าสู่ระบบ (Login)';
-    })
-    .loginUserOnly(email);
+    });
 }
 
 // ─── INIT APP — single bundled call ───
@@ -415,41 +427,30 @@ function initAppData(forceRefresh) {
   if (btn1) { btn1.disabled = true; btn1.innerText = '⏳ กำลังดึงข้อมูล...'; }
   if (btnAdmin) { btnAdmin.disabled = true; btnAdmin.innerText = '⏳ กำลังดึงข้อมูล...'; }
 
-  google.script.run
-    .withSuccessHandler(function(res) {
+  gasGet('initApp', { email: currentEmail, filterStart: start, filterEnd: end, forceRefresh: String(forceRefresh === true) })
+    .then(function(res) {
       isLoading = false;
       if (btn1) { btn1.disabled = false; btn1.innerText = '🔄 Refresh Data'; }
       if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = 'Apply Filter (Refresh)'; }
 
-      if (!res) {
-        showWarning('❌ ไม่ได้รับข้อมูลจาก Server กรุณา Refresh หน้าเว็บ');
-        return;
-      }
-      if (!res.success) {
-        showWarning('❌ เกิดข้อผิดพลาด: ' + (res.error || 'Unknown error'));
-        return;
-      }
+      if (!res) { showWarning('❌ ไม่ได้รับข้อมูลจาก Server กรุณา Refresh หน้าเว็บ'); return; }
+      if (!res.success) { showWarning('❌ เกิดข้อผิดพลาด: ' + (res.error || 'Unknown error')); return; }
 
-      // Build store dropdown from bundled result
       storeOptionsHtml = '<option value="">-- เลือกสาขา --</option>';
       res.stores.forEach(r => {
         storeOptionsHtml += `<option value="${r.storeNo}">${r.storeNo} - ${r.branch} (${r.region})</option>`;
       });
 
-      // Render dashboard
       renderDashboard(res.dashboard);
-
-      // Load grid data now that stores are ready
       fetchGridData('int');
       fetchGridData('work');
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       isLoading = false;
       if (btn1) { btn1.disabled = false; btn1.innerText = '🔄 Refresh Data'; }
       if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = 'Apply Filter (Refresh)'; }
       showWarning('❌ เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + (err.message || err));
-    })
-    .initApp(currentEmail, start, end, forceRefresh === true);
+    });
 }
 
 // loadDashboard ใช้ initAppData เพื่อ keep single-call pattern
@@ -471,10 +472,9 @@ function fetchGridData(prefix) {
   const type = prefix === 'int' ? 'Interview' : 'StartWork';
   document.getElementById(`${prefix}Body`).innerHTML = `<tr><td colspan="6" class="center">⏳ กำลังดึงข้อมูลของวันที่ ${formatDateThai(date)}...</td></tr>`;
 
-  google.script.run
-    .withSuccessHandler(function(res) { renderGrid(prefix, res); })
-    .withFailureHandler(function(err) { alert('ดึงข้อมูลล้มเหลว: ' + err.message); })
-    .getExistingGridDataAPI(currentEmail, type, date);
+  gasGet('getGridData', { email: currentEmail, type, date })
+    .then(function(res) { renderGrid(prefix, res); })
+    .catch(function(err) { alert('ดึงข้อมูลล้มเหลว: ' + err.message); });
 }
 
 function renderGrid(prefix, res) {
@@ -555,8 +555,8 @@ function saveAllData() {
   }
   btn.disabled = true;
   btn.innerText = 'กำลังเซฟและอัปเดตข้อมูล...';
-  google.script.run
-    .withSuccessHandler(function() {
+  gasPost('submitData', { userEmail: currentEmail, int: intData, work: workData })
+    .then(function() {
       alert('✅ บันทึกและอัปเดตข้อมูลสำเร็จ!');
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
@@ -564,12 +564,11 @@ function saveAllData() {
       fetchGridData('work');
       loadDashboard(true);
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       alert('Error: ' + err.message);
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
-    })
-    .submitCombinedData({ userEmail: currentEmail, int: intData, work: workData });
+    });
 }
 
 // ─── EXCEL UPLOAD ───
@@ -620,23 +619,22 @@ function processExcelUpload() {
       btn.innerText = 'กำลังส่งข้อมูลและบันทึกไฟล์...';
       const r64 = new FileReader();
       r64.onload = function(eB64) {
-        google.script.run
-          .withSuccessHandler(function() {
+        gasPost('submitData', {
+            userEmail: currentEmail, int: null,
+            work: { date: dateInput.value, remark: 'File Upload (Excel)', rows: payloadRows },
+            uploadFile: { name: file.name, type: file.type, data: eB64.target.result.split(',')[1] }
+          })
+          .then(function() {
             alert(`อัปโหลดสำเร็จ ${payloadRows.length} สาขา!`);
             fileInput.value = '';
             btn.disabled = false;
             btn.innerText = '🚀 ประมวลผลและส่งยอดคนเริ่มงานทันที';
             loadDashboard(true);
           })
-          .withFailureHandler(function(err) {
+          .catch(function(err) {
             alert('บันทึกล้มเหลว: ' + err.message);
             btn.disabled = false;
             btn.innerText = '🚀 ประมวลผลและส่งยอดคนเริ่มงานทันที';
-          })
-          .submitCombinedData({
-            userEmail: currentEmail, int: null,
-            work: { date: dateInput.value, remark: 'File Upload (Excel)', rows: payloadRows },
-            uploadFile: { name: file.name, type: file.type, data: eB64.target.result.split(',')[1] }
           });
       };
       r64.readAsDataURL(file);
@@ -879,10 +877,11 @@ function exportAdminData() {
   btn.innerText = '⏳ กำลังสร้างไฟล์ Excel...';
   fallbackDiv.innerHTML = '';
 
-  google.script.run
-    .withSuccessHandler(function(url) {
+  gasGet('exportAdmin', { email: currentEmail, filterStart: start, filterEnd: end })
+    .then(function(res) {
       btn.disabled = false;
       btn.innerText = '📥 Export Excel (Admin)';
+      const url = res.url;
       const win = window.open(url, '_blank');
       if (!win || win.closed || typeof win.closed === 'undefined') {
         fallbackDiv.innerHTML = `<div style="padding:10px; background:#dcfce7; border:1px solid #22c55e; border-radius:8px; display:flex; align-items:center; gap:15px; margin-top:5px;">
@@ -894,12 +893,11 @@ function exportAdminData() {
         setTimeout(() => fallbackDiv.innerHTML = '', 5000);
       }
     })
-    .withFailureHandler(function(err) {
+    .catch(function(err) {
       alert('Error: ' + err.message);
       btn.disabled = false;
       btn.innerText = '📥 Export Excel (Admin)';
-    })
-    .exportAdminExcelAPI(currentEmail, start, end);
+    });
 }
 
 function logout() { location.reload(); }

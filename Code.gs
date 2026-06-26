@@ -10,11 +10,64 @@ const WEEKLY_HEADERS = [
   'Started Work', 'Remark', 'Updated By'
 ];
 
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('AEC Tracking System (Pro)')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || '';
+
+  if (!action) {
+    return HtmlService.createHtmlOutputFromFile('index')
+      .setTitle('AEC Tracking System (Pro)')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  let result;
+  try {
+    switch (action) {
+      case 'login':
+        result = loginUserOnly(e.parameter.email);
+        break;
+      case 'initApp':
+        result = initApp(
+          e.parameter.email,
+          e.parameter.filterStart || '',
+          e.parameter.filterEnd || '',
+          e.parameter.forceRefresh === 'true'
+        );
+        break;
+      case 'getGridData':
+        result = getExistingGridDataAPI(e.parameter.email, e.parameter.type, e.parameter.date);
+        break;
+      case 'exportAdmin':
+        result = { url: exportAdminExcelAPI(e.parameter.email, e.parameter.filterStart || '', e.parameter.filterEnd || '') };
+        break;
+      default:
+        result = { success: false, error: 'Unknown action: ' + action };
+    }
+  } catch (err) {
+    result = { success: false, error: err.message };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  let result;
+  try {
+    const payload = JSON.parse(e.postData.contents);
+    const action = payload.action;
+    switch (action) {
+      case 'submitData':
+        result = submitCombinedData(payload.data);
+        break;
+      default:
+        result = { success: false, error: 'Unknown action' };
+    }
+  } catch (err) {
+    result = { success: false, error: err.message };
+  }
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ─────────────────────────────────────────────
