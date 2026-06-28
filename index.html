@@ -443,7 +443,11 @@ function login() {
       document.getElementById('lblMyVendor').innerText = `(${res.user.vendor})`;
 
       if (res.user.isAdmin) {
-        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+        // แสดงเฉพาะ element ที่ไม่ใช่ tab-content (เช่น ปุ่มเมนู Dashboard)
+        // ปล่อยให้ระบบ tab จัดการการแสดง/ซ่อนเนื้อหาแท็บเอง ผ่าน class .active
+        document.querySelectorAll('.admin-only').forEach(el => {
+          if (!el.classList.contains('tab-content')) el.style.display = 'block';
+        });
         document.getElementById('vendor-target-section').style.display = 'none';
         document.getElementById('vendor-history-section').style.display = 'none';
 
