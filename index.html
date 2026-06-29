@@ -51,11 +51,13 @@
     .stat-label { font-size: 0.8rem; color: #64748b; font-weight: bold; text-transform: uppercase; }
 
     .display-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.85rem; }
-    .display-table th { background: var(--primary); color: white; padding: 12px; text-align: left; position: sticky; top: 0; }
+    .display-table th { background: var(--primary); color: white; padding: 12px; text-align: left; position: sticky; top: 0; z-index: 2; }
     .display-table td { padding: 10px; border-bottom: 1px solid #e2e8f0; }
-    .display-table tr:hover td { background: #f8fafc; }
+    .display-table tbody tr:hover td { background: #f8fafc; }
+    /* แถวผลรวม (Total) ติดด้านล่างเสมอ มองเห็นตลอดไม่ว่าจะ scroll ไปไหน */
+    .display-table tfoot td { position: sticky; bottom: 0; z-index: 2; background: #1e293b; }
     .right { text-align: right; } .center { text-align: center; }
-    .filter-input { width: 100%; padding: 6px; font-size: 0.8rem; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 6px; }
+    .filter-input { width: 100%; padding: 6px; font-size: 0.8rem; border-radius: 4px; border: 1px solid #cbd5e1; margin-top: 6px; background: white; }
 
     .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
     .login-box { background: white; padding: 40px; border-radius: 20px; width: 100%; max-width: 400px; text-align: center; }
@@ -280,10 +282,10 @@
         <table class="display-table" id="adminAllBranchesTable">
           <thead>
             <tr>
-              <th>Store No<br><input type="text" class="filter-input" onkeyup="filterTable('adminAllBranchesTable')" placeholder="ค้นหา..."></th>
-              <th>Branch Name<br><input type="text" class="filter-input" onkeyup="filterTable('adminAllBranchesTable')" placeholder="ค้นหา..."></th>
-              <th>Region<br><input type="text" class="filter-input" onkeyup="filterTable('adminAllBranchesTable')" placeholder="ค้นหา..."></th>
-              <th>Vendor เจ้าภาพ<br><input type="text" class="filter-input" onkeyup="filterTable('adminAllBranchesTable')" placeholder="ค้นหา..."></th>
+              <th>Store No<br><select class="filter-input" id="fltStore" onchange="filterTable('adminAllBranchesTable')"><option value="">ทั้งหมด</option></select></th>
+              <th>Branch Name<br><select class="filter-input" id="fltBranch" onchange="filterTable('adminAllBranchesTable')"><option value="">ทั้งหมด</option></select></th>
+              <th>Region<br><select class="filter-input" id="fltRegion" onchange="filterTable('adminAllBranchesTable')"><option value="">ทั้งหมด</option></select></th>
+              <th>Vendor เจ้าภาพ<br><select class="filter-input" id="fltVendor" onchange="filterTable('adminAllBranchesTable')"><option value="">ทั้งหมด</option></select></th>
               <th class="right">Target</th><th class="right">Passed</th><th class="right">Started</th><th class="right">Remaining</th><th class="right">Progress</th>
               <th class="center">Last Interview Date</th><th class="center">Last Started Date</th>
             </tr>
@@ -796,6 +798,9 @@ function renderAdminTables(data) {
     </tr>`
   ).join('');
 
+  // เติมตัวเลือกใน dropdown filter จากข้อมูลจริง
+  populateBranchFilters(data.allBranchRows);
+
   // Region table
   if (data.regionRows) {
     let sumT = 0, sumP = 0, sumS = 0, sumR = 0;
@@ -897,6 +902,25 @@ function renderAdminGraphs(data) {
   document.getElementById('regSummaryBarTfoot').innerHTML = `<tr><td style="padding:12px;">GRAND TOTAL</td><td class="right">${fmt(sumS)}</td><td><div class="bar-track" style="height:24px; background:#e0e7ff;"><div class="bar-fill" style="width:${overallPct}%; background:#0284c7; font-size:0.85rem; justify-content:center;">${overallPct}%</div></div></td></tr>`;
 }
 
+// ─── เติมตัวเลือก dropdown filter ของตาราง Admin Branch Summary ───
+function populateBranchFilters(rows) {
+  if (!rows) return;
+  const fill = (id, values) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const current = sel.value;
+    const uniq = [...new Set(values.filter(v => v !== '' && v != null))]
+      .sort((a, b) => String(a).localeCompare(String(b), 'th', { numeric: true }));
+    sel.innerHTML = '<option value="">ทั้งหมด</option>' +
+      uniq.map(v => `<option value="${String(v).replace(/"/g, '&quot;')}">${v}</option>`).join('');
+    if (uniq.map(String).includes(current)) sel.value = current; // คงค่าที่เลือกไว้ถ้ายังมีอยู่
+  };
+  fill('fltStore',  rows.map(r => r.storeNo));
+  fill('fltBranch', rows.map(r => r.branch));
+  fill('fltRegion', rows.map(r => r.region));
+  fill('fltVendor', rows.map(r => r.mainVendor));
+}
+
 // ─── FILTER TABLE ───
 function filterTable(tableId) {
   const table = document.getElementById(tableId);
@@ -908,7 +932,12 @@ function filterTable(tableId) {
     let show = true;
     const cells = rows[i].getElementsByTagName('td');
     inputs.forEach((inp, j) => {
-      if (inp.value && cells[j] && cells[j].innerText.toLowerCase().indexOf(inp.value.toLowerCase()) === -1) show = false;
+      if (!inp.value || !cells[j]) return;
+      const cellText = cells[j].innerText.trim().toLowerCase();
+      const filterVal = inp.value.trim().toLowerCase();
+      // dropdown (select) = ตรงตัวเป๊ะ, ช่องพิมพ์ (input) = ค้นหาบางส่วน
+      if (inp.tagName === 'SELECT') { if (cellText !== filterVal) show = false; }
+      else if (cellText.indexOf(filterVal) === -1) show = false;
     });
     rows[i].style.display = show ? '' : 'none';
     if (show && tableId === 'adminAllBranchesTable' && cells.length >= 9) {
