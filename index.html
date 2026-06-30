@@ -50,6 +50,28 @@
     .tab-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
+    /* ════ Dashboard sidebar ย่อย ════ */
+    .dash-layout { display: flex; gap: 22px; align-items: flex-start; }
+    .dash-side {
+      width: 218px; flex-shrink: 0; background: white; border: 1px solid var(--border); border-radius: 14px;
+      padding: 12px; box-shadow: var(--shadow); position: sticky; top: 88px; display: flex; flex-direction: column; gap: 5px;
+    }
+    .dash-side-title { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); padding: 6px 12px 10px; }
+    .dash-nav { display: flex; align-items: center; gap: 11px; text-align: left; padding: 12px 14px; border-radius: 10px; border: none; background: transparent; color: #475569; font-family: inherit; font-weight: 700; font-size: 0.92rem; cursor: pointer; transition: .16s; white-space: nowrap; }
+    .dash-nav .dash-ic { font-size: 1.1rem; width: 22px; text-align: center; }
+    .dash-nav:hover { background: #f1f6ff; color: var(--accent); }
+    .dash-nav.active { background: var(--grad); color: white; box-shadow: 0 5px 14px -4px rgba(37,99,235,.5); }
+    .dash-content { flex: 1; min-width: 0; }
+    .dash-panel { display: none; animation: fadeIn .25s ease; }
+    .dash-panel.active { display: block; }
+
+    @media (max-width: 900px) {
+      .dash-layout { flex-direction: column; }
+      .dash-side { width: 100%; position: static; flex-direction: row; overflow-x: auto; gap: 8px; }
+      .dash-side-title { display: none; }
+      .dash-nav { flex-shrink: 0; }
+    }
+
     /* ── Cards ── */
     .card { background: white; border-radius: var(--radius); padding: 26px; margin-bottom: 22px; box-shadow: var(--shadow); border: 1px solid var(--border); transition: box-shadow .2s, transform .2s; }
     .card:hover { box-shadow: var(--shadow-lg); }
@@ -302,6 +324,20 @@
       </div>
     </div>
 
+    <div class="dash-layout">
+      <!-- Sidebar ย่อยของ Dashboard -->
+      <aside class="dash-side">
+        <div class="dash-side-title">เมนู Dashboard</div>
+        <button class="dash-nav active" onclick="dashNav('panel-overview', this)"><span class="dash-ic">📊</span> ภาพรวมพนักงาน</button>
+        <button class="dash-nav" onclick="dashNav('panel-plan', this)"><span class="dash-ic">🗺️</span> แผน Onboarding</button>
+        <button class="dash-nav" onclick="dashNav('panel-branch', this)"><span class="dash-ic">🏢</span> ข้อมูลสาขา</button>
+        <button class="dash-nav" onclick="dashNav('panel-vendor', this)"><span class="dash-ic">🏭</span> สรุปราย Vendor</button>
+        <button class="dash-nav" onclick="dashNav('panel-region', this)"><span class="dash-ic">🌍</span> สรุปรายภูมิภาค</button>
+      </aside>
+
+      <div class="dash-content">
+      <!-- ░░ PANEL: ภาพรวมพนักงาน ░░ -->
+      <div class="dash-panel active" id="panel-overview">
     <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:#fffbeb; border-color:#fde047;">
       <h2 style="margin:0; border:none; font-size:1.6rem; color:#854d0e;">Summary: Existing AEC Staff <span class="date-info" style="font-size:0.9rem;">(ข้อมูลทั้งหมด)</span></h2>
       <div class="summary-badge"><span id="gTotalStaff">-</span> Staff Deployed Across <span id="gTotalStores">-</span> Stores</div>
@@ -329,7 +365,10 @@
         <div class="tier-list" id="tier3-list"></div>
       </div>
     </div>
+      </div><!-- /panel-overview -->
 
+      <!-- ░░ PANEL: แผน Onboarding ░░ -->
+      <div class="dash-panel" id="panel-plan">
     <div class="card">
       <h2 style="background:#bfdbfe; padding:12px; border-radius:8px; margin:-24px -24px 20px -24px;">AEC Onboarding Plan <span style="float:right; font-size:1rem; margin-top:3px;">Active Stores: <span id="gActiveCount">-</span> (Target: <span id="gTotalCount">-</span>) | TOTAL HEADCOUNTS: <span id="gTotalHeadcounts">-</span></span></h2>
       <div class="reg-grid" id="regionalGridContainer"><span class="spinner"></span> กำลังโหลด...</div>
@@ -346,7 +385,10 @@
       </div>
       <div id="regionSummaryView"><span class="spinner"></span> กำลังโหลด...</div>
     </div>
+      </div><!-- /panel-plan -->
 
+      <!-- ░░ PANEL: ข้อมูลสาขา ░░ -->
+      <div class="dash-panel" id="panel-branch">
     <div class="card" style="border:2px solid #0f172a;">
       <h2>🏢 ข้อมูลสาขาทั้งหมด (Admin Branch Summary)</h2>
       <div id="adminBranchFilteredSum" class="filtered-sum-bar"><span class="spinner"></span> กำลังโหลด...</div>
@@ -366,7 +408,10 @@
         </table>
       </div>
     </div>
+      </div><!-- /panel-branch -->
 
+      <!-- ░░ PANEL: สรุปราย Vendor ░░ -->
+      <div class="dash-panel" id="panel-vendor">
     <div class="card">
       <h2>สรุปผลงานราย Vendor (Vendor Performance) <span id="lblVendorDate" class="date-info"></span></h2>
       <div class="tablewrap">
@@ -380,7 +425,10 @@
         </table>
       </div>
     </div>
+      </div><!-- /panel-vendor -->
 
+      <!-- ░░ PANEL: สรุปรายภูมิภาค ░░ -->
+      <div class="dash-panel" id="panel-region">
     <div class="card">
       <h2>สรุปเป้าหมายรายภูมิภาค (Region Summary) <span id="lblRegionDate" class="date-info"></span></h2>
       <div class="tablewrap">
@@ -391,6 +439,9 @@
         </table>
       </div>
     </div>
+      </div><!-- /panel-region -->
+      </div><!-- /dash-content -->
+    </div><!-- /dash-layout -->
   </div>
 </div><!-- end #app -->
 
@@ -491,6 +542,15 @@ function switchTab(tabId, element) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   element.classList.add('active');
+}
+
+// สลับ panel ภายในหน้า Dashboard (sidebar ย่อย)
+function dashNav(panelId, element) {
+  document.querySelectorAll('.dash-panel').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.dash-nav').forEach(el => el.classList.remove('active'));
+  const panel = document.getElementById(panelId);
+  if (panel) panel.classList.add('active');
+  if (element) element.classList.add('active');
 }
 
 // ─── LOGIN ─── (Decoupled: auth fast → UI shows → initApp loads all data)
