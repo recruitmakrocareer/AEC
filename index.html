@@ -50,35 +50,6 @@
     .tab-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ════════ SIDEBAR LAYOUT ════════ */
-    #app { display: flex; min-height: 100vh; }
-    .sidebar {
-      width: 234px; flex-shrink: 0; background: linear-gradient(180deg, #0f172a 0%, #1a2540 100%);
-      color: #cbd5e1; display: flex; flex-direction: column; padding: 14px 12px;
-      position: sticky; top: 0; height: 100vh; box-shadow: 4px 0 18px -8px rgba(0,0,0,.4); z-index: 60;
-    }
-    .side-brand { display: flex; align-items: center; gap: 10px; padding: 10px 12px 18px; font-size: 1.15rem; font-weight: 800; color: #fbbf24; letter-spacing: .3px; border-bottom: 1px solid rgba(255,255,255,.08); margin-bottom: 12px; }
-    .side-brand-ic { font-size: 1.4rem; }
-    .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-    .side-item { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: 11px; font-weight: 700; font-size: 0.95rem; color: #cbd5e1; cursor: pointer; border: none; background: transparent; transition: .16s; white-space: nowrap; }
-    .side-item .side-ic { font-size: 1.2rem; width: 24px; text-align: center; flex-shrink: 0; }
-    .side-item:hover { background: rgba(255,255,255,.08); color: white; }
-    .side-item.active { background: var(--grad); color: white; box-shadow: 0 6px 16px -4px rgba(37,99,235,.6); }
-    .side-logout { display: flex; align-items: center; gap: 13px; padding: 13px 14px; border-radius: 11px; font-weight: 700; font-size: 0.95rem; color: #fca5a5; cursor: pointer; border: none; background: rgba(239,68,68,.12); font-family: inherit; transition: .16s; margin-top: 8px; }
-    .side-logout:hover { background: #ef4444; color: white; }
-    .side-logout .side-ic { font-size: 1.2rem; width: 24px; text-align: center; }
-    .main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .side-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 55; }
-    .side-toggle { display: none; background: rgba(255,255,255,.12); color: white; border: none; font-size: 1.3rem; width: 42px; height: 42px; border-radius: 10px; cursor: pointer; margin-right: 14px; flex-shrink: 0; }
-    .side-toggle:hover { background: rgba(255,255,255,.22); }
-
-    @media (max-width: 860px) {
-      .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); transition: transform .25s ease; }
-      .sidebar.open { transform: translateX(0); }
-      .side-overlay.show { display: block; }
-      .side-toggle { display: inline-flex; align-items: center; justify-content: center; }
-    }
-
     /* ── Cards ── */
     .card { background: white; border-radius: var(--radius); padding: 26px; margin-bottom: 22px; box-shadow: var(--shadow); border: 1px solid var(--border); transition: box-shadow .2s, transform .2s; }
     .card:hover { box-shadow: var(--shadow-lg); }
@@ -194,30 +165,22 @@
 
 <!-- ═══════════ APP ═══════════ -->
 <div id="app" class="hidden">
-  <!-- ═══ SIDEBAR ═══ -->
-  <aside class="sidebar" id="sidebar">
-    <div class="side-brand"><span class="side-brand-ic">📊</span><span class="side-tx">AEC Tracking</span></div>
-    <nav class="side-nav">
-      <div class="tab-btn side-item active" onclick="switchTab('tab-entry', this)"><span class="side-ic">📝</span><span class="side-tx">บันทึกข้อมูล</span></div>
-      <div class="tab-btn side-item" onclick="switchTab('tab-upload', this)"><span class="side-ic">📁</span><span class="side-tx">อัปโหลดไฟล์</span></div>
-      <div class="tab-btn side-item" onclick="switchTab('tab-branch', this)"><span class="side-ic">🏢</span><span class="side-tx">สาขา &amp; ประวัติ</span></div>
-      <div class="tab-btn side-item admin-only" id="nav-admin" onclick="switchTab('tab-admin', this)"><span class="side-ic">📈</span><span class="side-tx">รายงานรวม</span></div>
-    </nav>
-    <button class="side-logout" onclick="logout()"><span class="side-ic">🚪</span><span class="side-tx">ออกจากระบบ</span></button>
-  </aside>
-  <div class="side-overlay" id="sideOverlay" onclick="toggleSidebar(false)"></div>
-
-  <!-- ═══ MAIN AREA ═══ -->
-  <div class="main-area">
-    <div class="topbar">
-      <button class="side-toggle" onclick="toggleSidebar()" aria-label="เมนู">☰</button>
-      <div style="flex:1;">
-        <div id="userInfo" class="user-welcome"></div>
-        <div id="userRole" class="topbar-sub"></div>
-      </div>
+  <div class="topbar">
+    <div>
+      <div id="userInfo" class="user-welcome"></div>
+      <div id="userRole" class="topbar-sub"></div>
     </div>
+    <button class="btn-logout" onclick="logout()">LOG OUT</button>
+  </div>
 
-    <div id="dbWarning" style="display:none; background:#fee2e2; color:#b91c1c; padding:12px; border-radius:8px; margin:20px auto; max-width:1200px; font-size:0.9rem; font-weight:bold; border:1px solid #f87171; text-align:center;"></div>
+  <div class="tabs">
+    <div class="tab-btn active" onclick="switchTab('tab-entry', this)">📝 บันทึกข้อมูล</div>
+    <div class="tab-btn" onclick="switchTab('tab-upload', this)">📁 อัปโหลดไฟล์ (Onboard)</div>
+    <div class="tab-btn" onclick="switchTab('tab-branch', this)">🏢 สาขา &amp; ประวัติ</div>
+    <div class="tab-btn admin-only" id="nav-admin" onclick="switchTab('tab-admin', this)">📊 รายงานรวม (Dashboard)</div>
+  </div>
+
+  <div id="dbWarning" style="display:none; background:#fee2e2; color:#b91c1c; padding:12px; border-radius:8px; margin:20px auto; max-width:1200px; font-size:0.9rem; font-weight:bold; border:1px solid #f87171; text-align:center;"></div>
 
   <!-- TAB: DATA ENTRY -->
   <div class="tab-content active" id="tab-entry">
@@ -429,7 +392,6 @@
       </div>
     </div>
   </div>
-  </div><!-- end .main-area -->
 </div><!-- end #app -->
 
 <script>
@@ -529,18 +491,6 @@ function switchTab(tabId, element) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   element.classList.add('active');
-  toggleSidebar(false); // ปิดเมนูอัตโนมัติบนมือถือหลังเลือก
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// เปิด/ปิด sidebar (สำหรับจอเล็ก) — เรียกแบบไม่ส่งค่า = สลับ, ส่ง false = ปิด
-function toggleSidebar(force) {
-  const sb = document.getElementById('sidebar');
-  const ov = document.getElementById('sideOverlay');
-  if (!sb) return;
-  const open = (force === undefined) ? !sb.classList.contains('open') : force;
-  sb.classList.toggle('open', open);
-  if (ov) ov.classList.toggle('show', open);
 }
 
 // ─── LOGIN ─── (Decoupled: auth fast → UI shows → initApp loads all data)
