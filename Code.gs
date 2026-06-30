@@ -31,7 +31,9 @@ function doGet(e) {
           e.parameter.email,
           e.parameter.filterStart || '',
           e.parameter.filterEnd || '',
-          e.parameter.forceRefresh === 'true'
+          e.parameter.forceRefresh === 'true',
+          e.parameter.gridIntDate || '',
+          e.parameter.gridWorkDate || ''
         );
         break;
       case 'getGridData':
@@ -126,7 +128,7 @@ function loginUserOnly(email) {
 // ─────────────────────────────────────────────
 //  INIT APP — single bundled call after login
 // ─────────────────────────────────────────────
-function initApp(email, filterStart, filterEnd, forceRefresh) {
+function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridWorkDate) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const userObj = loginUserOnly(email).user;
@@ -142,7 +144,12 @@ function initApp(email, filterStart, filterEnd, forceRefresh) {
 
     const dashboard = getDashboardDataCore_(ss, userObj, targets, extDB, filterStart || '', filterEnd || '');
     const stores = targets.map(row => ({ storeNo: row.storeNo, branch: row.branch, region: row.region }));
-    return { success: true, user: userObj, dashboard: dashboard, stores: stores };
+
+    // รวมข้อมูลตารางกรอก (Interview/StartWork) มาด้วยในครั้งเดียว เพื่อลดจำนวน request → โหลดเร็วขึ้น
+    const gridInt  = gridIntDate  ? getExistingGridDataCore_(ss, userObj.vendor, 'Interview', gridIntDate)  : null;
+    const gridWork = gridWorkDate ? getExistingGridDataCore_(ss, userObj.vendor, 'StartWork', gridWorkDate) : null;
+
+    return { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
   } catch (e) {
     // ต้อง return object ไม่ใช่ throw เพื่อให้ frontend จัดการได้
     return { success: false, error: e.message };

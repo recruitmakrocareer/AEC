@@ -462,7 +462,7 @@ function gasRunGet(action, params) {
       .withFailureHandler(err => reject(new Error(err && err.message ? err.message : String(err))));
     switch (action) {
       case 'login':       runner.loginUserOnly(params.email); break;
-      case 'initApp':     runner.initApp(params.email, params.filterStart || '', params.filterEnd || '', params.forceRefresh === 'true'); break;
+      case 'initApp':     runner.initApp(params.email, params.filterStart || '', params.filterEnd || '', params.forceRefresh === 'true', params.gridIntDate || '', params.gridWorkDate || ''); break;
       case 'getGridData': runner.getExistingGridDataAPI(params.email, params.type, params.date); break;
       case 'exportAdmin': runner.withSuccessHandler(url => resolve({ url }))
                                 .exportAdminExcelAPI(params.email, params.filterStart || '', params.filterEnd || ''); break;
@@ -564,9 +564,16 @@ function login() {
   btn.innerText = 'กำลังเข้าสู่ระบบ...';
   status.innerText = '';
 
-  gasGet('login', { email })
+  // เรียกครั้งเดียวได้ทั้ง login + dashboard + ตารางกรอก 2 ตาราง → โหลดเร็วขึ้นมาก
+  isLoading = true;
+  gasGet('initApp', {
+    email: email, filterStart: '', filterEnd: '', forceRefresh: 'true',
+    gridIntDate: document.getElementById('intDate').value || '',
+    gridWorkDate: document.getElementById('workDate').value || ''
+  })
     .then(function(res) {
-      if (res.error) throw new Error(res.error);
+      isLoading = false;
+      if (!res || !res.success) throw new Error((res && res.error) || 'เข้าสู่ระบบไม่สำเร็จ');
       currentEmail = email;
       currentUser = res.user;
 
@@ -577,34 +584,29 @@ function login() {
       document.getElementById('lblMyVendor').innerText = `(${res.user.vendor})`;
 
       if (res.user.isAdmin) {
-        // แสดงเฉพาะ element ที่ไม่ใช่ tab-content (เช่น ปุ่มเมนู Dashboard)
-        // ปล่อยให้ระบบ tab จัดการการแสดง/ซ่อนเนื้อหาแท็บเอง ผ่าน class .active
+        // แสดงปุ่มเมนู Dashboard (เฉพาะ element ที่ไม่ใช่ tab-content)
         document.querySelectorAll('.admin-only').forEach(el => {
           if (!el.classList.contains('tab-content')) el.style.display = 'block';
         });
         document.getElementById('vendor-target-section').style.display = 'none';
         document.getElementById('vendor-history-section').style.display = 'none';
-
-        // Auto-set date range: 1st of current month → today
-        const now = new Date();
-        const yyyy = now.getFullYear();
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const dd = String(now.getDate()).padStart(2, '0');
-        const firstOfMonth = `${yyyy}-${mm}-01`;
-        const today = `${yyyy}-${mm}-${dd}`;
-        const fsEl = document.getElementById('filterStart');
-        const feEl = document.getElementById('filterEnd');
-        if (fsEl && !fsEl.value) fsEl.value = firstOfMonth;
-        if (feEl && !feEl.value) feEl.value = today;
       }
 
-      initAppData(true);
+      // ใช้ข้อมูลที่ได้มาในครั้งเดียว — ไม่ต้องยิง Server เพิ่ม
+      storeOptionsHtml = '<option value="">-- เลือกสาขา --</option>';
+      res.stores.forEach(r => {
+        storeOptionsHtml += `<option value="${r.storeNo}">${r.storeNo} - ${r.branch} (${r.region})</option>`;
+      });
+      renderDashboard(res.dashboard);
+      if (res.gridInt)  renderGrid('int', res.gridInt);
+      if (res.gridWork) renderGrid('work', res.gridWork);
 
       // Auto-refresh: อัปเดตเฉพาะ Dashboard (ไม่แตะตารางกรอกข้อมูล เพื่อไม่ให้ข้อมูลที่พิมพ์ค้างหาย)
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
       autoRefreshTimer = setInterval(() => { if (currentEmail && !isLoading) initAppData(false, true); }, 120000);
     })
     .catch(function(err) {
+      isLoading = false;
       status.innerText = '❌ ' + (err.message || err);
       status.style.color = '#dc2626';
       btn.disabled = false;
@@ -627,7 +629,14 @@ function initAppData(forceRefresh, skipGrid) {
   if (btn1) { btn1.disabled = true; btn1.innerText = '⏳ กำลังดึงข้อมูล...'; }
   if (btnAdmin) { btnAdmin.disabled = true; btnAdmin.innerText = '⏳ กำลังดึงข้อมูล...'; }
 
-  gasGet('initApp', { email: currentEmail, filterStart: start, filterEnd: end, forceRefresh: String(forceRefresh === true) })
+  // ตอน refresh ปกติ ดึงข้อมูลตารางมาพร้อมกันในครั้งเดียว (auto-refresh ไม่ดึง เพื่อกันข้อมูลพิมพ์ค้างหาย)
+  const gParams = { email: currentEmail, filterStart: start, filterEnd: end, forceRefresh: String(forceRefresh === true) };
+  if (!skipGrid) {
+    gParams.gridIntDate = (document.getElementById('intDate') || {}).value || '';
+    gParams.gridWorkDate = (document.getElementById('workDate') || {}).value || '';
+  }
+
+  gasGet('initApp', gParams)
     .then(function(res) {
       isLoading = false;
       if (btn1) { btn1.disabled = false; btn1.innerText = '🔄 Refresh Data'; }
@@ -642,10 +651,10 @@ function initAppData(forceRefresh, skipGrid) {
       });
 
       renderDashboard(res.dashboard);
-      // ดึงข้อมูลตารางกรอกเฉพาะตอนโหลด/refresh ปกติ — ไม่ทำตอน auto-refresh (กันข้อมูลพิมพ์ค้างหาย)
+      // ใช้ข้อมูลตารางที่ส่งมาพร้อมกัน — ไม่ต้องยิง Server เพิ่ม
       if (!skipGrid) {
-        fetchGridData('int');
-        fetchGridData('work');
+        if (res.gridInt)  renderGrid('int', res.gridInt);
+        if (res.gridWork) renderGrid('work', res.gridWork);
       }
     })
     .catch(function(err) {
