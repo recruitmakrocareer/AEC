@@ -234,10 +234,11 @@ function getExternalDBData_(forceRefresh) {
       result.manpower.error = 'ไม่พบชีต Manpower_Status_AEC';
     }
 
-    // Cache result (5 min)
+    // Cache result (30 นาที) — ลดการอ่าน External Spreadsheet ซ้ำที่ทำให้โหลดช้า
+    // กด "Apply Filter (Refresh)" หรือ login ใหม่ จะ force refresh ดึงข้อมูลสดอยู่แล้ว
     try {
       const str = JSON.stringify(result);
-      if (str.length < 100000) cache.put(CACHE_KEY, str, 300);
+      if (str.length < 100000) cache.put(CACHE_KEY, str, 1800);
     } catch (e) {}
 
   } catch (e) {

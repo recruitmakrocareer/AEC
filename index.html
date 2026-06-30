@@ -540,8 +540,9 @@ function login() {
 
       initAppData(true);
 
+      // Auto-refresh: อัปเดตเฉพาะ Dashboard (ไม่แตะตารางกรอกข้อมูล เพื่อไม่ให้ข้อมูลที่พิมพ์ค้างหาย)
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-      autoRefreshTimer = setInterval(() => { if (currentEmail && !isLoading) initAppData(false); }, 60000);
+      autoRefreshTimer = setInterval(() => { if (currentEmail && !isLoading) initAppData(false, true); }, 120000);
     })
     .catch(function(err) {
       status.innerText = '❌ ' + (err.message || err);
@@ -553,7 +554,7 @@ function login() {
 
 // ─── INIT APP — single bundled call ───
 let isLoading = false;
-function initAppData(forceRefresh) {
+function initAppData(forceRefresh, skipGrid) {
   if (isLoading) return;
   if (!currentEmail) return;
   isLoading = true;
@@ -581,8 +582,11 @@ function initAppData(forceRefresh) {
       });
 
       renderDashboard(res.dashboard);
-      fetchGridData('int');
-      fetchGridData('work');
+      // ดึงข้อมูลตารางกรอกเฉพาะตอนโหลด/refresh ปกติ — ไม่ทำตอน auto-refresh (กันข้อมูลพิมพ์ค้างหาย)
+      if (!skipGrid) {
+        fetchGridData('int');
+        fetchGridData('work');
+      }
     })
     .catch(function(err) {
       isLoading = false;
@@ -699,8 +703,7 @@ function saveAllData() {
       alert('✅ บันทึกและอัปเดตข้อมูลสำเร็จ!');
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
-      fetchGridData('int');
-      fetchGridData('work');
+      // loadDashboard(true) ดึงทั้ง dashboard + ตาราง grid ให้อยู่แล้ว ไม่ต้องเรียก fetchGridData ซ้ำ
       loadDashboard(true);
     })
     .catch(function(err) {
