@@ -351,12 +351,15 @@ function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridW
       return { success: false, error: 'ไม่สามารถโหลด External DB ได้ กรุณาลองใหม่' };
     }
 
-    const dashboard = getDashboardDataCore_(ss, userObj, targets, extDB, filterStart || '', filterEnd || '');
+    // อ่าน Weekly_Update ครั้งเดียว ใช้ร่วมกันทั้ง dashboard + ตารางกรอก 2 ตาราง (เดิมอ่าน 3 รอบ)
+    const weeklyValues = readWeeklyValues_(ss);
+
+    const dashboard = getDashboardDataCore_(ss, userObj, targets, extDB, filterStart || '', filterEnd || '', weeklyValues);
     const stores = targets.map(row => ({ storeNo: row.storeNo, branch: row.branch, region: row.region }));
 
     // รวมข้อมูลตารางกรอก (Interview/StartWork) มาด้วยในครั้งเดียว เพื่อลดจำนวน request → โหลดเร็วขึ้น
-    const gridInt  = gridIntDate  ? getExistingGridDataCore_(ss, userObj.vendor, 'Interview', gridIntDate)  : null;
-    const gridWork = gridWorkDate ? getExistingGridDataCore_(ss, userObj.vendor, 'StartWork', gridWorkDate) : null;
+    const gridInt  = gridIntDate  ? getExistingGridDataCore_(ss, userObj.vendor, 'Interview', gridIntDate, weeklyValues)  : null;
+    const gridWork = gridWorkDate ? getExistingGridDataCore_(ss, userObj.vendor, 'StartWork', gridWorkDate, weeklyValues) : null;
 
     return { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
   } catch (e) {
@@ -468,7 +471,7 @@ function getExternalDBData_(forceRefresh) {
 // ─────────────────────────────────────────────
 //  DASHBOARD CORE
 // ─────────────────────────────────────────────
-function getDashboardDataCore_(ss, currentUser, targets, extDB, filterStart, filterEnd) {
+function getDashboardDataCore_(ss, currentUser, targets, extDB, filterStart, filterEnd, weeklyValues) {
   const manpowerMap    = extDB.manpower.map;
   const masterTargetMap = extDB.master.map;
 
@@ -476,21 +479,16 @@ function getDashboardDataCore_(ss, currentUser, targets, extDB, filterStart, fil
   if (extDB.manpower.error) dbErrors.push(extDB.manpower.error);
   if (extDB.master.error)   dbErrors.push(extDB.master.error);
 
-  // ── Read Weekly_Update ──
+  // ── Read Weekly_Update (ใช้ค่าที่อ่านมาแล้วถ้ามี เพื่อไม่อ่านซ้ำ) ──
   let allUpdates = [];
-  const weeklySheet = ss.getSheetByName(WEEKLY_UPDATE_SHEET_NAME)
-    || ss.getSheets().find(s => s.getName().toLowerCase() === WEEKLY_UPDATE_SHEET_NAME.toLowerCase());
-
-  if (weeklySheet) {
-    const values = weeklySheet.getDataRange().getValues();
-    if (values.length >= 2) {
-      const headers = values[0].map(h => String(h).trim().replace(/\s+/g, ' ').toLowerCase());
-      allUpdates = values.slice(1).map(row => {
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = row[i]);
-        return obj;
-      });
-    }
+  const values = weeklyValues || readWeeklyValues_(ss);
+  if (values.length >= 2) {
+    const headers = values[0].map(h => String(h).trim().replace(/\s+/g, ' ').toLowerCase());
+    allUpdates = values.slice(1).map(row => {
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = row[i]);
+      return obj;
+    });
   }
 
   // ── Date filter (admin only) ──
@@ -666,13 +664,16 @@ function getExistingGridDataAPI(email, type, date) {
   return getExistingGridDataCore_(ss, userObj.vendor, type, date);
 }
 
-function getExistingGridDataCore_(ss, vendor, type, targetDate) {
+// อ่านชีต Weekly_Update ครั้งเดียว (ใช้ร่วมกันหลายฟังก์ชันเพื่อไม่อ่านซ้ำ → เร็วขึ้น)
+function readWeeklyValues_(ss) {
   const sheet = ss.getSheetByName(WEEKLY_UPDATE_SHEET_NAME)
     || ss.getSheets().find(s => s.getName().toLowerCase() === WEEKLY_UPDATE_SHEET_NAME.toLowerCase());
-  if (!sheet) return { rows: [], remark: '' };
+  return sheet ? sheet.getDataRange().getValues() : [];
+}
 
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return { rows: [], remark: '' };
+function getExistingGridDataCore_(ss, vendor, type, targetDate, preValues) {
+  const values = preValues || readWeeklyValues_(ss);
+  if (!values || values.length < 2) return { rows: [], remark: '' };
 
   const storeMap  = {};
   let lastRemark  = '';

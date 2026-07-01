@@ -820,7 +820,7 @@ function login() {
     email: email,
     filterStart: (document.getElementById('filterStart') || {}).value || '',
     filterEnd: (document.getElementById('filterEnd') || {}).value || '',
-    forceRefresh: 'true',
+    forceRefresh: 'false',
     gridIntDate: document.getElementById('intDate').value || '',
     gridWorkDate: document.getElementById('workDate').value || ''
   })
@@ -1025,8 +1025,8 @@ function saveAllData() {
       alert('✅ บันทึกและอัปเดตข้อมูลสำเร็จ!');
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
-      // loadDashboard(true) ดึงทั้ง dashboard + ตาราง grid ให้อยู่แล้ว ไม่ต้องเรียก fetchGridData ซ้ำ
-      loadDashboard(true);
+      // loadDashboard ดึงทั้ง dashboard + ตาราง grid ให้อยู่แล้ว (false = ใช้ cache External DB, เร็วกว่า)
+      loadDashboard(false);
     })
     .catch(function(err) {
       alert('Error: ' + err.message);
