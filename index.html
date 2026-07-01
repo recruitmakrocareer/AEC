@@ -313,12 +313,12 @@
   <div class="tab-content admin-only" id="tab-admin">
     <div class="card" style="background:#eff6ff; border-color:#bfdbfe;">
       <h2>🔍 กรองข้อมูลผลงานและส่งออก (Filter & Export)</h2>
-      <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap:wrap;">
-        <div><label>ตั้งแต่วันที่</label><input type="date" id="filterStart"></div>
-        <div><label>ถึงวันที่</label><input type="date" id="filterEnd"></div>
-        <button class="btn btn-primary" onclick="loadDashboard(true)" id="btnRefreshAdmin" style="width:auto; padding:10px 20px; margin-bottom:2px;">Apply Filter (Refresh)</button>
-        <div style="display:flex; flex-direction:column; gap:5px;">
-          <button class="btn btn-outline" onclick="exportAdminData()" id="btnExportAdmin" style="width:auto; padding:10px 20px; margin:0; background:white; border-color:#10b981; color:#10b981;">📥 Export Excel (Admin)</button>
+      <div style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="min-width:150px;"><label>ตั้งแต่วันที่</label><input type="date" id="filterStart"></div>
+        <div style="min-width:150px;"><label>ถึงวันที่</label><input type="date" id="filterEnd"></div>
+        <button class="btn btn-primary" onclick="loadDashboard(true)" id="btnRefreshAdmin" style="width:auto; padding:11px 22px; margin:0;">🔄 Apply Filter</button>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-left:auto;">
+          <button class="btn btn-outline" onclick="exportAdminData()" id="btnExportAdmin" style="width:auto; padding:11px 22px; margin:0; background:white; border-color:#10b981; color:#10b981;">📥 Export Excel</button>
           <div id="exportFallback" style="font-size:0.8rem; margin:0;"></div>
         </div>
       </div>
@@ -525,6 +525,15 @@ function formatDateThai(s) { if (!s) return ''; const [y, m, d] = s.split('-'); 
 document.getElementById('intDate').value = today();
 document.getElementById('workDate').value = today();
 document.getElementById('uploadDate').value = today();
+// ตัวกรอง Dashboard: ค่าเริ่มต้น = ต้นปีนี้ → วันนี้ (ให้ข้อมูลขึ้นครบ ไม่โชว์ 0 ทั้งหมด)
+(function () {
+  const now = new Date();
+  const y = now.getFullYear();
+  const fs = document.getElementById('filterStart');
+  const fe = document.getElementById('filterEnd');
+  if (fs && !fs.value) fs.value = `${y}-01-01`;
+  if (fe && !fe.value) fe.value = today();
+})();
 
 document.getElementById('loginEmail').addEventListener('keypress', function(e) {
   if (e.key === 'Enter') { e.preventDefault(); login(); }
@@ -567,7 +576,10 @@ function login() {
   // เรียกครั้งเดียวได้ทั้ง login + dashboard + ตารางกรอก 2 ตาราง → โหลดเร็วขึ้นมาก
   isLoading = true;
   gasGet('initApp', {
-    email: email, filterStart: '', filterEnd: '', forceRefresh: 'true',
+    email: email,
+    filterStart: (document.getElementById('filterStart') || {}).value || '',
+    filterEnd: (document.getElementById('filterEnd') || {}).value || '',
+    forceRefresh: 'true',
     gridIntDate: document.getElementById('intDate').value || '',
     gridWorkDate: document.getElementById('workDate').value || ''
   })
