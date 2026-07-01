@@ -8,21 +8,23 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #0f172a; --accent: #3b82f6; --accent-dark: #2563eb;
-      --bg: #eef2f7; --text: #334155; --muted: #64748b;
-      --border: #e5e9f0; --radius: 14px;
-      --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
-      --shadow: 0 4px 16px -4px rgba(15,23,42,0.12), 0 2px 6px -2px rgba(15,23,42,0.06);
-      --shadow-lg: 0 12px 32px -8px rgba(15,23,42,0.18);
-      --grad: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      --primary: #1e293b; --accent: #4f46e5; --accent-dark: #4338ca;
+      --bg: #f0f2f5; --text: #344767; --muted: #7b809a;
+      --border: #eef0f4; --radius: 16px;
+      --shadow-sm: 0 2px 6px rgba(20,20,43,0.06);
+      --shadow: 0 8px 26px -6px rgba(20,20,43,0.14), 0 2px 8px -2px rgba(20,20,43,0.06);
+      --shadow-lg: 0 20px 40px -12px rgba(20,20,43,0.22);
+      --grad: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      --grad-info: linear-gradient(135deg, #49a3f1 0%, #1a73e8 100%);
+      --grad-success: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; background: var(--bg); color: var(--text); padding-bottom: 50px;
-      font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif; font-size: 15px; line-height: 1.55;
+      font-family: 'Sarabun', 'Inter', 'Segoe UI', Tahoma, sans-serif; font-size: 15px; line-height: 1.6;
       -webkit-font-smoothing: antialiased;
     }
     .hidden { display: none !important; }
@@ -32,9 +34,9 @@
 
     /* ── Topbar ── */
     .topbar {
-      background: linear-gradient(120deg, #0f172a 0%, #1e293b 60%, #243353 100%);
-      color: white; padding: 16px 28px; display: flex; justify-content: space-between; align-items: center;
-      box-shadow: var(--shadow); position: sticky; top: 0; z-index: 50;
+      background: linear-gradient(120deg, #1e293b 0%, #334155 60%, #3b4a6b 100%);
+      color: white; padding: 18px 28px; display: flex; justify-content: space-between; align-items: center;
+      box-shadow: var(--shadow);
     }
     .user-welcome { font-size: 1.45rem; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: .3px; line-height: 1.15; }
     .topbar-sub { font-size: 0.78rem; color: #aebed6; margin-top: 3px; }
@@ -42,10 +44,10 @@
     .btn-logout:hover { background: #dc2626; transform: translateY(-1px); box-shadow: 0 4px 12px -2px rgba(220,38,38,.5); }
 
     /* ── Tabs ── */
-    .tabs { display: flex; gap: 6px; overflow-x: auto; background: white; border-bottom: 1px solid var(--border); padding: 8px 16px 0; box-shadow: var(--shadow-sm); position: sticky; top: 64px; z-index: 40; }
-    .tab-btn { padding: 12px 22px; font-weight: 700; color: var(--muted); cursor: pointer; border: none; border-radius: 10px 10px 0 0; white-space: nowrap; font-size: 0.95rem; border-bottom: 3px solid transparent; transition: .18s; }
-    .tab-btn:hover { color: var(--accent); background: #f1f6ff; }
-    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: #eff5ff; }
+    .tabs { display: flex; gap: 8px; overflow-x: auto; background: white; padding: 12px 16px; box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 40; }
+    .tab-btn { padding: 11px 20px; font-weight: 700; color: var(--muted); cursor: pointer; border: none; border-radius: 10px; white-space: nowrap; font-size: 0.9rem; transition: .2s; background: transparent; }
+    .tab-btn:hover { color: var(--accent); background: #f5f4ff; }
+    .tab-btn.active { color: white; background: var(--grad); box-shadow: 0 5px 14px -4px rgba(79,70,229,.5); }
     .tab-content { display: none; animation: fadeIn 0.28s ease; padding: 24px 18px; max-width: 1240px; margin: 0 auto; }
     .tab-content.active { display: block; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -72,26 +74,26 @@
       .dash-nav { flex-shrink: 0; }
     }
 
-    /* ── Cards ── */
-    .card { background: white; border-radius: var(--radius); padding: 26px; margin-bottom: 22px; box-shadow: var(--shadow); border: 1px solid var(--border); transition: box-shadow .2s, transform .2s; }
-    .card:hover { box-shadow: var(--shadow-lg); }
-    h2 { font-size: 1.18rem; color: var(--primary); margin-top: 0; margin-bottom: 18px; padding-bottom: 12px; padding-left: 14px; font-weight: 800; border-bottom: 1px solid var(--border); position: relative; }
-    h2::before { content: ''; position: absolute; left: 0; top: 2px; height: 1.1rem; width: 5px; border-radius: 3px; background: var(--grad); }
-    h3 { font-weight: 700; }
+    /* ── Cards (Material elevation) ── */
+    .card { background: white; border-radius: var(--radius); padding: 24px 26px; margin-bottom: 24px; box-shadow: var(--shadow); border: none; transition: box-shadow .25s, transform .25s; }
+    .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+    h2 { font-size: 1.1rem; color: var(--primary); margin-top: 0; margin-bottom: 18px; padding-bottom: 12px; padding-left: 14px; font-weight: 700; border-bottom: 1px solid var(--border); position: relative; letter-spacing: .2px; }
+    h2::before { content: ''; position: absolute; left: 0; top: 3px; height: 1rem; width: 4px; border-radius: 3px; background: var(--grad); }
+    h3 { font-weight: 700; color: var(--primary); }
     label { font-size: 0.85rem; font-weight: 600; color: #475569; display: block; margin-bottom: 7px; }
     input, select, textarea { width: 100%; padding: 11px 12px; border: 1px solid #cdd5e1; border-radius: 9px; font-size: 0.95rem; font-family: inherit; color: var(--text); background: white; transition: .15s; }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.16); }
     select { cursor: pointer; }
 
-    /* ── Buttons ── */
-    .btn { width: 100%; border: none; border-radius: 10px; padding: 12px 16px; font-weight: 700; font-size: 1rem; font-family: inherit; cursor: pointer; color: white; transition: .18s; margin-top: 10px; }
-    .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); }
+    /* ── Buttons (Material) ── */
+    .btn { width: 100%; border: none; border-radius: 10px; padding: 12px 18px; font-weight: 700; font-size: 0.86rem; letter-spacing: .5px; text-transform: uppercase; font-family: inherit; cursor: pointer; color: white; transition: .2s; margin-top: 10px; box-shadow: 0 4px 12px -3px rgba(79,70,229,.5); }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 18px -4px rgba(79,70,229,.55); }
     .btn:active:not(:disabled) { transform: translateY(0); }
-    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
     .btn-primary { background: var(--grad); }
-    .btn-outline { background: #f8fafc; border: 2px dashed #cbd5e1; color: #475569; }
-    .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: #f1f6ff; }
-    .btn-save-all { background: linear-gradient(135deg, #10b981 0%, #059669 100%); font-size: 1.2rem; padding: 16px; margin-top: 0; }
+    .btn-outline { background: white; border: 1.5px solid #d6d9e0; color: #67748e; box-shadow: none; }
+    .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: #f5f4ff; box-shadow: var(--shadow-sm); }
+    .btn-save-all { background: var(--grad-success); font-size: 1.05rem; padding: 16px; margin-top: 0; box-shadow: 0 4px 14px -3px rgba(67,160,71,.5); }
 
     /* ── Grid entry tables ── */
     .tablewrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 12px; }
@@ -113,12 +115,12 @@
     .stat-val { font-size: 1.85rem; font-weight: 800; color: var(--primary); margin-top: 6px; }
     .stat-label { font-size: 0.72rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
 
-    /* ── Display tables ── */
-    .display-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.86rem; }
-    .display-table th { background: var(--primary); color: white; padding: 13px 12px; text-align: left; font-weight: 600; position: sticky; top: 0; z-index: 2; white-space: nowrap; }
-    .display-table td { padding: 11px 12px; border-bottom: 1px solid #eef1f6; }
-    .display-table tbody tr:nth-child(even) td { background: #f9fafc; }
-    .display-table tbody tr:hover td { background: #eef5ff; }
+    /* ── Display tables (Material) ── */
+    .display-table { width: 100%; border-collapse: collapse; min-width: 800px; font-size: 0.85rem; }
+    .display-table th { background: #f8f9fc; color: var(--muted); padding: 13px 12px; text-align: left; font-weight: 700; font-size: 0.68rem; letter-spacing: .6px; text-transform: uppercase; border-bottom: 1px solid #e6e9f0; position: sticky; top: 0; z-index: 2; white-space: nowrap; }
+    .display-table td { padding: 12px; border-bottom: 1px solid #f0f2f6; }
+    .display-table tbody tr:last-child td { border-bottom: none; }
+    .display-table tbody tr:hover td { background: #f5f4ff; }
     /* แถวผลรวม (Total) ติดด้านล่างเสมอ มองเห็นตลอดไม่ว่าจะ scroll ไปไหน */
     .display-table tfoot td { position: sticky; bottom: 0; z-index: 2; background: #1e293b; }
     .right { text-align: right; } .center { text-align: center; }
@@ -130,6 +132,8 @@
     .login-container::before { width: 380px; height: 380px; background: #3b82f6; top: -120px; right: -80px; }
     .login-container::after { width: 300px; height: 300px; background: #6366f1; bottom: -100px; left: -60px; }
     .login-box { background: white; padding: 44px 40px; border-radius: 22px; width: 100%; max-width: 410px; text-align: center; box-shadow: 0 24px 60px -12px rgba(0,0,0,.5); position: relative; z-index: 1; }
+    .login-box h2 { padding-left: 0; border-bottom: none; }
+    .login-box h2::before { display: none; }
 
     .admin-only { display: none; }
     .date-info { font-size: 0.85rem; color: var(--muted); font-weight: 400; margin-left: 10px; }

@@ -14,7 +14,7 @@ function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || '';
 
   if (!action) {
-    return HtmlService.createHtmlOutputFromFile('index')
+    return HtmlService.createHtmlOutput(getAppHtml_())
       .setTitle('AEC Tracking System (Pro)')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -60,6 +60,37 @@ function doGet(e) {
 
   return ContentService.createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ─────────────────────────────────────────────
+//  ดึงหน้าเว็บ (index.html) จาก GitHub อัตโนมัติ
+//  → deploy Code.gs ครั้งเดียว ทุกครั้งที่แก้ index.html บน GitHub จะอัปเดตเอง
+//  → ไม่ต้อง copy index มาวางใน Apps Script อีกต่อไป
+// ─────────────────────────────────────────────
+function getAppHtml_() {
+  const HTML_URL = 'https://raw.githubusercontent.com/recruitmakrocareer/AEC/main/index.html';
+  const cache = CacheService.getScriptCache();
+  const CKEY = 'AEC_INDEX_HTML_V1';
+
+  // cache 60 วิ เพื่อให้อัปเดตไว แต่ไม่ต้อง fetch ทุกครั้ง
+  const cached = cache.get(CKEY);
+  if (cached) return cached;
+
+  try {
+    const res = UrlFetchApp.fetch(HTML_URL, { muteHttpExceptions: true, followRedirects: true });
+    if (res.getResponseCode() === 200) {
+      const html = res.getContentText();
+      try { if (html.length < 100000) cache.put(CKEY, html, 60); } catch (e) {}
+      return html;
+    }
+  } catch (e) {}
+
+  // สำรอง: ถ้าดึงจาก GitHub ไม่ได้ ใช้ไฟล์ index ที่ฝังใน project (ถ้ามี)
+  try {
+    return HtmlService.createHtmlOutputFromFile('index').getContent();
+  } catch (e) {
+    return '<h2 style="font-family:sans-serif;text-align:center;margin-top:40px;">โหลดหน้าเว็บไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</h2>';
+  }
 }
 
 function doPost(e) {
