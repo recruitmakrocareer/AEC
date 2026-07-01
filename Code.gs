@@ -3,6 +3,14 @@ const MANPOWER_DB_ID = '1Wn1gnstzG_2Wi_Tc95cw0rIC1dIoHJvHbghlxceJy9A';
 const TARGET_SHEET_NAME = 'Target';
 const WEEKLY_UPDATE_SHEET_NAME = 'Weekly_Update';
 const USER_SHEET_NAME = 'Users';
+const NAMELIST_SHEET_NAME = 'Name_List';
+
+// หัวตารางของ Sheet "Name_List" (รายชื่อพนักงานที่ vendor อัปโหลด)
+const NAMELIST_HEADERS = [
+  'Timestamp', 'Agency Name', 'Full Name', 'Store No', 'Branch', 'Position', 'Start Date', 'Status'
+];
+// สถานะที่อนุญาต (dropdown)
+const NAMELIST_STATUSES = ['รอเริ่มงาน', 'เริ่มงาน', 'ไม่มาเริ่มงาน'];
 
 const WEEKLY_HEADERS = [
   'Timestamp', 'Action Date', 'Store No', 'Branch', 'Branch TH', 'Region',
@@ -39,6 +47,12 @@ function doGet(e) {
       case 'getGridData':
         result = getExistingGridDataAPI(e.parameter.email, e.parameter.type, e.parameter.date);
         break;
+      case 'getNameList':
+        result = getNameListAPI(e.parameter.email);
+        break;
+      case 'startDetail':
+        result = getStartDetailAPI(e.parameter.email, e.parameter.date);
+        break;
       case 'exportAdmin':
         result = { url: exportAdminExcelAPI(e.parameter.email, e.parameter.filterStart || '', e.parameter.filterEnd || '') };
         break;
@@ -60,6 +74,147 @@ function doGet(e) {
 
   return ContentService.createTextOutput(json)
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ═════════════════════════════════════════════
+//  NAME LIST (รายชื่อพนักงานที่ vendor อัปโหลด)
+// ═════════════════════════════════════════════
+function ensureNameListSheet_(ss) {
+  let sheet = ss.getSheetByName(NAMELIST_SHEET_NAME)
+    || ss.getSheets().find(s => s.getName().toLowerCase() === NAMELIST_SHEET_NAME.toLowerCase());
+  if (!sheet) {
+    sheet = ss.insertSheet(NAMELIST_SHEET_NAME);
+    sheet.getRange(1, 1, 1, NAMELIST_HEADERS.length).setValues([NAMELIST_HEADERS]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+// ดึงรายชื่อ — vendor เห็นเฉพาะของตนเอง, admin เห็นทั้งหมด
+function getNameListAPI(email) {
+  try {
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const user = loginUserOnly(email).user;
+    const sheet = ensureNameListSheet_(ss);
+    const values = sheet.getDataRange().getValues();
+    const rows = [];
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i];
+      if (!r[2] && !r[1]) continue; // ข้ามแถวว่าง
+      const agency = String(r[1] || '').trim();
+      if (!user.isAdmin && agency !== user.vendor) continue; // vendor เห็นเฉพาะของตนเอง
+      rows.push({
+        rowIndex:  i + 1,                // เลขแถวจริงใน sheet (ไว้ update)
+        agency:    agency,
+        name:      String(r[2] || ''),
+        storeNo:   String(r[3] || ''),
+        branch:    String(r[4] || ''),
+        position:  String(r[5] || ''),
+        startDate: normalizeDate_(r[6]),
+        status:    String(r[7] || NAMELIST_STATUSES[0])
+      });
+    }
+    return { success: true, rows: rows, isAdmin: user.isAdmin, vendor: user.vendor, statuses: NAMELIST_STATUSES };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// อัปโหลดรายชื่อ (ต่อท้าย) — Agency Name ใส่อัตโนมัติตาม vendor ของผู้ใช้
+function uploadNameList(payload) {
+  try {
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const user = loginUserOnly(payload.userEmail).user;
+    const vendor = user.vendor;
+    const sheet = ensureNameListSheet_(ss);
+    const targets = getTargets_(ss);
+    const ts = new Date();
+
+    const rows = (payload.rows || []).map(r => {
+      const storeNo = padStoreNo_(r.storeNo);
+      const t = targets.find(x => x.storeNo === storeNo);
+      let status = String(r.status || '').trim();
+      if (NAMELIST_STATUSES.indexOf(status) === -1) status = NAMELIST_STATUSES[0];
+      return [
+        ts, vendor, String(r.name || '').trim(), storeNo,
+        t ? t.branch : String(r.branch || ''),
+        String(r.position || '').trim(),
+        r.startDate ? normalizeDate_(r.startDate) : '',
+        status
+      ];
+    }).filter(row => row[2]); // ต้องมีชื่อ
+
+    if (rows.length === 0) return { success: false, error: 'ไม่พบรายชื่อในไฟล์ (คอลัมน์ชื่อว่าง)' };
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, NAMELIST_HEADERS.length).setValues(rows);
+    return { success: true, added: rows.length };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// อัปเดตสถานะ — ตรวจสอบว่า vendor เป็นเจ้าของแถวก่อนแก้
+function updateNameListStatus(payload) {
+  try {
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const user = loginUserOnly(payload.userEmail).user;
+    const sheet = ensureNameListSheet_(ss);
+    const values = sheet.getDataRange().getValues();
+    let updated = 0;
+    (payload.updates || []).forEach(u => {
+      const idx = Number(u.rowIndex);
+      if (!idx || idx < 2 || idx > values.length) return;
+      const rowAgency = String(values[idx - 1][1] || '').trim();
+      if (!user.isAdmin && rowAgency !== user.vendor) return; // กันแก้ของ vendor อื่น
+      let status = String(u.status || '').trim();
+      if (NAMELIST_STATUSES.indexOf(status) === -1) return;
+      sheet.getRange(idx, 8).setValue(status); // คอลัมน์ Status = 8
+      updated++;
+    });
+    return { success: true, updated: updated };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ═════════════════════════════════════════════
+//  ADMIN — รายละเอียดคนเริ่มงานในวันที่เลือก
+//  (สาขาไหน / ตำแหน่งอะไร / vendor ไหน / จำนวนเท่าไหร่)
+// ═════════════════════════════════════════════
+function getStartDetailAPI(email, date) {
+  try {
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const user = loginUserOnly(email).user;
+    const targetDate = normalizeDate_(date);
+    const sheet = ss.getSheetByName(WEEKLY_UPDATE_SHEET_NAME)
+      || ss.getSheets().find(s => s.getName().toLowerCase() === WEEKLY_UPDATE_SHEET_NAME.toLowerCase());
+    if (!sheet) return { success: true, rows: [], totals: { qty: 0 } };
+
+    const values = sheet.getDataRange().getValues();
+    const rows = [];
+    let totalQty = 0;
+    for (let i = 1; i < values.length; i++) {
+      const r = values[i];
+      if (normalizeDate_(r[1]) !== targetDate) continue;
+      if (String(r[8]).trim() !== 'StartWork') continue;           // เฉพาะคนเริ่มงาน
+      const vendor = String(r[7] || '').trim();
+      if (!user.isAdmin && vendor !== user.vendor) continue;       // vendor เห็นเฉพาะของตนเอง
+      const qty = Number(r[11]) || 0;
+      if (qty <= 0) continue;
+      rows.push({
+        storeNo:  padStoreNo_(r[2]),
+        branch:   String(r[3] || ''),
+        region:   String(r[5] || ''),
+        vendor:   vendor,
+        position: String(r[9] || ''),
+        qty:      qty
+      });
+      totalQty += qty;
+    }
+    rows.sort((a, b) => a.storeNo.localeCompare(b.storeNo) || a.vendor.localeCompare(b.vendor));
+    return { success: true, rows: rows, totals: { qty: totalQty }, date: targetDate };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -101,6 +256,12 @@ function doPost(e) {
     switch (action) {
       case 'submitData':
         result = submitCombinedData(payload.data);
+        break;
+      case 'uploadNameList':
+        result = uploadNameList(payload.data);
+        break;
+      case 'updateNameStatus':
+        result = updateNameListStatus(payload.data);
         break;
       default:
         result = { success: false, error: 'Unknown action' };

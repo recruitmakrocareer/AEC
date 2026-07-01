@@ -203,6 +203,7 @@
     <div class="tab-btn active" onclick="switchTab('tab-entry', this)">📝 บันทึกข้อมูล</div>
     <div class="tab-btn" onclick="switchTab('tab-upload', this)">📁 อัปโหลดไฟล์ (Onboard)</div>
     <div class="tab-btn" onclick="switchTab('tab-branch', this)">🏢 สาขา &amp; ประวัติ</div>
+    <div class="tab-btn" onclick="switchTab('tab-namelist', this)">📋 Name List</div>
     <div class="tab-btn admin-only" id="nav-admin" onclick="switchTab('tab-admin', this)">📊 รายงานรวม (Dashboard)</div>
   </div>
 
@@ -313,6 +314,41 @@
     </div>
   </div>
 
+  <!-- TAB: NAME LIST (vendor upload รายชื่อ) -->
+  <div class="tab-content" id="tab-namelist">
+    <div class="card" style="background:#f5f4ff;">
+      <h2>📋 อัปโหลดรายชื่อพนักงาน (Name List)</h2>
+      <p style="font-size:0.9rem; color:var(--muted); margin-top:-6px; margin-bottom:16px;">
+        ดาวน์โหลดฟอร์มเปล่า → กรอกข้อมูล → อัปโหลดกลับ (Agency Name จะถูกใส่ตามชื่อบริษัทของคุณอัตโนมัติ)
+      </p>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+        <button class="btn btn-outline" style="width:auto; margin:0;" onclick="downloadNameTemplate()">⬇️ ดาวน์โหลดฟอร์มเปล่า (.csv)</button>
+        <input type="file" id="nameFile" accept=".csv,.xlsx,.xls" style="max-width:340px;">
+        <button class="btn btn-primary" style="width:auto; margin:0;" onclick="uploadNameFile()" id="btnNameUpload">🚀 อัปโหลดรายชื่อ</button>
+      </div>
+      <div id="nameUploadStatus" style="margin-top:12px; font-size:0.9rem; font-weight:700;"></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <h2 style="margin:0; border:none; padding-left:14px;">รายชื่อทั้งหมด <span id="nameListCount" class="date-info"></span></h2>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label style="margin:0; white-space:nowrap;">กรองสถานะ:</label>
+          <select id="nameStatusFilter" onchange="renderNameList()" style="width:auto; min-width:150px;"><option value="">ทั้งหมด</option></select>
+          <button class="btn btn-primary" style="width:auto; margin:0;" onclick="saveNameStatus()" id="btnSaveStatus">💾 บันทึกสถานะ</button>
+        </div>
+      </div>
+      <div class="tablewrap" style="max-height:560px; margin-top:16px;">
+        <table class="display-table" id="nameListTable">
+          <thead><tr>
+            <th>Agency</th><th>ชื่อ-นามสกุล</th><th>สาขา</th><th>ตำแหน่ง</th><th>วันเริ่มงาน</th><th style="min-width:150px;">สถานะ</th>
+          </tr></thead>
+          <tbody id="nameListTbody"><tr><td colspan="6" class="center" style="padding:20px; color:#94a3b8;">— ยังไม่ได้โหลดข้อมูล —</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: ADMIN DASHBOARD -->
   <div class="tab-content admin-only" id="tab-admin">
     <div class="card" style="background:#eff6ff; border-color:#bfdbfe;">
@@ -333,6 +369,7 @@
       <aside class="dash-side">
         <div class="dash-side-title">เมนู Dashboard</div>
         <button class="dash-nav active" onclick="dashNav('panel-overview', this)"><span class="dash-ic">📊</span> ภาพรวมพนักงาน</button>
+        <button class="dash-nav" onclick="dashNav('panel-daily', this)"><span class="dash-ic">📅</span> คนเริ่มงานรายวัน</button>
         <button class="dash-nav" onclick="dashNav('panel-plan', this)"><span class="dash-ic">🗺️</span> แผน Onboarding</button>
         <button class="dash-nav" onclick="dashNav('panel-branch', this)"><span class="dash-ic">🏢</span> ข้อมูลสาขา</button>
         <button class="dash-nav" onclick="dashNav('panel-vendor', this)"><span class="dash-ic">🏭</span> สรุปราย Vendor</button>
@@ -444,6 +481,25 @@
       </div>
     </div>
       </div><!-- /panel-region -->
+
+      <!-- ░░ PANEL: คนเริ่มงานรายวัน ░░ -->
+      <div class="dash-panel" id="panel-daily">
+    <div class="card">
+      <h2>📅 รายละเอียดคนเริ่มงานรายวัน</h2>
+      <p style="font-size:0.88rem; color:var(--muted); margin-top:-6px; margin-bottom:16px;">เลือกวันที่ เพื่อดูว่ามีพนักงานเริ่มงานที่สาขาไหน ตำแหน่งอะไร จาก Vendor ไหน จำนวนเท่าไหร่</p>
+      <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:16px;">
+        <div style="min-width:180px;"><label>เลือกวันที่เริ่มงาน</label><input type="date" id="detailDate"></div>
+        <button class="btn btn-primary" style="width:auto; margin:0;" onclick="loadStartDetail()" id="btnDetail">🔍 ดูข้อมูล</button>
+        <div class="summary-badge" id="detailTotal" style="margin-left:auto;">รวม 0 คน</div>
+      </div>
+      <div class="tablewrap" style="max-height:540px;">
+        <table class="display-table">
+          <thead><tr><th>Store No</th><th>Branch</th><th>Region</th><th>Vendor</th><th>ตำแหน่ง</th><th class="right">จำนวน</th></tr></thead>
+          <tbody id="detailTbody"><tr><td colspan="6" class="center" style="padding:20px; color:#94a3b8;">— เลือกวันที่แล้วกด "ดูข้อมูล" —</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+      </div><!-- /panel-daily -->
       </div><!-- /dash-content -->
     </div><!-- /dash-layout -->
   </div>
@@ -468,6 +524,8 @@ function gasRunGet(action, params) {
       case 'login':       runner.loginUserOnly(params.email); break;
       case 'initApp':     runner.initApp(params.email, params.filterStart || '', params.filterEnd || '', params.forceRefresh === 'true', params.gridIntDate || '', params.gridWorkDate || ''); break;
       case 'getGridData': runner.getExistingGridDataAPI(params.email, params.type, params.date); break;
+      case 'getNameList': runner.getNameListAPI(params.email); break;
+      case 'startDetail': runner.getStartDetailAPI(params.email, params.date); break;
       case 'exportAdmin': runner.withSuccessHandler(url => resolve({ url }))
                                 .exportAdminExcelAPI(params.email, params.filterStart || '', params.filterEnd || ''); break;
       default: reject(new Error('Unknown action: ' + action));
@@ -504,6 +562,8 @@ function gasPost(action, data) {
         .withSuccessHandler(resolve)
         .withFailureHandler(err => reject(new Error(err && err.message ? err.message : String(err))));
       if (action === 'submitData') runner.submitCombinedData(data);
+      else if (action === 'uploadNameList') runner.uploadNameList(data);
+      else if (action === 'updateNameStatus') runner.updateNameListStatus(data);
       else reject(new Error('Unknown action: ' + action));
     });
   }
@@ -537,6 +597,8 @@ document.getElementById('uploadDate').value = today();
   const fe = document.getElementById('filterEnd');
   if (fs && !fs.value) fs.value = `${y}-01-01`;
   if (fe && !fe.value) fe.value = today();
+  const dd = document.getElementById('detailDate');   // วันที่ของ "คนเริ่มงานรายวัน"
+  if (dd && !dd.value) dd.value = today();
 })();
 
 document.getElementById('loginEmail').addEventListener('keypress', function(e) {
@@ -555,6 +617,8 @@ function switchTab(tabId, element) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   element.classList.add('active');
+  // โหลด Name List ครั้งแรกที่เปิดแท็บ
+  if (tabId === 'tab-namelist' && !__nameLoaded && currentEmail) loadNameList();
 }
 
 // สลับ panel ภายในหน้า Dashboard (sidebar ย่อย)
@@ -564,6 +628,163 @@ function dashNav(panelId, element) {
   const panel = document.getElementById(panelId);
   if (panel) panel.classList.add('active');
   if (element) element.classList.add('active');
+}
+
+// ══════════ NAME LIST (vendor อัปโหลดรายชื่อ) ══════════
+let __nameData = [];
+let __nameStatuses = ['รอเริ่มงาน', 'เริ่มงาน', 'ไม่มาเริ่มงาน'];
+let __nameLoaded = false;
+
+function loadNameList() {
+  const tb = document.getElementById('nameListTbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="6" class="center" style="padding:20px;"><span class="spinner"></span> กำลังโหลด...</td></tr>';
+  gasGet('getNameList', { email: currentEmail })
+    .then(function(res) {
+      __nameLoaded = true;
+      if (!res || !res.success) { if (tb) tb.innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">${(res && res.error) || 'โหลดไม่สำเร็จ'}</td></tr>`; return; }
+      __nameData = res.rows || [];
+      __nameStatuses = res.statuses || __nameStatuses;
+      const f = document.getElementById('nameStatusFilter');
+      if (f) f.innerHTML = '<option value="">ทั้งหมด</option>' + __nameStatuses.map(s => `<option value="${s}">${s}</option>`).join('');
+      renderNameList();
+    })
+    .catch(function(err) { if (tb) tb.innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">${err.message}</td></tr>`; });
+}
+
+function statusColor(s) { return s === 'เริ่มงาน' ? '#16a34a' : s === 'ไม่มาเริ่มงาน' ? '#dc2626' : '#d97706'; }
+
+function renderNameList() {
+  const tb = document.getElementById('nameListTbody');
+  if (!tb) return;
+  const filter = (document.getElementById('nameStatusFilter') || {}).value || '';
+  const rows = __nameData.filter(r => !filter || r.status === filter);
+  const cnt = document.getElementById('nameListCount');
+  if (cnt) cnt.innerText = `(${fmt(rows.length)} รายชื่อ)`;
+  if (rows.length === 0) { tb.innerHTML = '<tr><td colspan="6" class="center" style="padding:20px; color:#94a3b8;">ไม่มีรายชื่อ</td></tr>'; return; }
+  tb.innerHTML = rows.map(r => {
+    const opts = __nameStatuses.map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('');
+    return `<tr>
+      <td>${r.agency}</td><td style="font-weight:600;">${r.name}</td>
+      <td>${r.storeNo}${r.branch ? (' - ' + r.branch) : ''}</td>
+      <td>${r.position}</td><td>${formatDateThai(r.startDate) || '-'}</td>
+      <td><select data-row="${r.rowIndex}" class="name-status" onchange="this.style.borderColor=statusColor(this.value); this.style.color=statusColor(this.value);" style="width:100%; font-weight:700; border-color:${statusColor(r.status)}; color:${statusColor(r.status)};">${opts}</select></td>
+    </tr>`;
+  }).join('');
+}
+
+function downloadNameTemplate() {
+  const headers = ['ชื่อ-นามสกุล', 'เลขที่สาขา', 'ตำแหน่ง (ล่าม/Bakery/Other)', 'วันเริ่มงาน (YYYY-MM-DD)', 'สถานะ (รอเริ่มงาน/เริ่มงาน/ไม่มาเริ่มงาน)'];
+  const example = ['สมชาย ใจดี', '001', 'ล่าม', '2026-07-07', 'รอเริ่มงาน'];
+  const csv = '﻿' + [headers.join(','), example.join(',')].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'NameList_Template.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+// แปลงวันเป็น YYYY-MM-DD (ให้ทุก vendor เห็น format เดียวกัน)
+function toYMD(v) {
+  if (v == null || v === '') return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) { let [, a, b, c] = m; if (c.length === 2) c = '20' + c; return `${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`; }
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) { const [y, mo, d] = s.split('-'); return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`; }
+  return s;
+}
+
+function uploadNameFile() {
+  const fileInput = document.getElementById('nameFile');
+  const st = document.getElementById('nameUploadStatus');
+  const btn = document.getElementById('btnNameUpload');
+  if (!fileInput.files[0]) { alert('กรุณาเลือกไฟล์รายชื่อ (.csv หรือ .xlsx)'); return; }
+  btn.disabled = true; btn.innerText = 'กำลังอัปโหลด...'; st.innerText = '';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true });
+      let hIdx = -1, cName = -1, cStore = -1, cPos = -1, cDate = -1, cStatus = -1;
+      for (let i = 0; i < Math.min(5, json.length); i++) {
+        const row = json[i]; if (!row) continue;
+        row.forEach((cell, j) => {
+          const c = String(cell || '').replace(/\s+/g, '').toLowerCase();
+          if (cName === -1 && (c.includes('ชื่อ') || c.includes('name'))) cName = j;
+          if (cStore === -1 && (c.includes('สาขา') || c.includes('store'))) cStore = j;
+          if (cPos === -1 && (c.includes('ตำแหน่ง') || c.includes('position'))) cPos = j;
+          if (cDate === -1 && (c.includes('วัน') || c.includes('date'))) cDate = j;
+          if (cStatus === -1 && (c.includes('สถานะ') || c.includes('status'))) cStatus = j;
+        });
+        if (cName !== -1) { hIdx = i; break; }
+      }
+      if (cName === -1) throw new Error("ไม่พบคอลัมน์ 'ชื่อ-นามสกุล' ในไฟล์");
+      const rows = [];
+      for (let i = hIdx + 1; i < json.length; i++) {
+        const r = json[i]; if (!r) continue;
+        const name = String((cName >= 0 ? r[cName] : '') || '').trim();
+        if (!name) continue;
+        rows.push({
+          name: name,
+          storeNo: cStore >= 0 ? String(r[cStore] || '').trim() : '',
+          position: cPos >= 0 ? String(r[cPos] || '').trim() : '',
+          startDate: cDate >= 0 ? toYMD(r[cDate]) : '',
+          status: cStatus >= 0 ? String(r[cStatus] || '').trim() : ''
+        });
+      }
+      if (rows.length === 0) throw new Error('ไม่พบรายชื่อในไฟล์');
+      gasPost('uploadNameList', { userEmail: currentEmail, rows: rows })
+        .then(function(res) {
+          btn.disabled = false; btn.innerText = '🚀 อัปโหลดรายชื่อ';
+          if (!res || !res.success) { st.style.color = '#dc2626'; st.innerText = '❌ ' + ((res && res.error) || 'อัปโหลดไม่สำเร็จ'); return; }
+          st.style.color = '#16a34a'; st.innerText = `✅ อัปโหลดสำเร็จ ${res.added} รายชื่อ`;
+          fileInput.value = '';
+          loadNameList();
+        })
+        .catch(function(err) { btn.disabled = false; btn.innerText = '🚀 อัปโหลดรายชื่อ'; st.style.color = '#dc2626'; st.innerText = '❌ ' + err.message; });
+    } catch (err) { btn.disabled = false; btn.innerText = '🚀 อัปโหลดรายชื่อ'; st.style.color = '#dc2626'; st.innerText = '❌ ' + err.message; }
+  };
+  reader.readAsArrayBuffer(fileInput.files[0]);
+}
+
+function saveNameStatus() {
+  const selects = document.querySelectorAll('#nameListTbody select.name-status');
+  const updates = [];
+  selects.forEach(s => {
+    const rowIndex = Number(s.getAttribute('data-row'));
+    const orig = (__nameData.find(r => r.rowIndex === rowIndex) || {}).status;
+    if (orig !== s.value) updates.push({ rowIndex: rowIndex, status: s.value });
+  });
+  if (updates.length === 0) { alert('ไม่มีการเปลี่ยนแปลงสถานะ'); return; }
+  const btn = document.getElementById('btnSaveStatus');
+  btn.disabled = true; btn.innerText = 'กำลังบันทึก...';
+  gasPost('updateNameStatus', { userEmail: currentEmail, updates: updates })
+    .then(function(res) {
+      btn.disabled = false; btn.innerText = '💾 บันทึกสถานะ';
+      if (!res || !res.success) { alert('บันทึกไม่สำเร็จ: ' + ((res && res.error) || '')); return; }
+      alert(`✅ บันทึกสถานะ ${res.updated} รายการ`);
+      loadNameList();
+    })
+    .catch(function(err) { btn.disabled = false; btn.innerText = '💾 บันทึกสถานะ'; alert('Error: ' + err.message); });
+}
+
+// ══════════ ADMIN: คนเริ่มงานรายวัน ══════════
+function loadStartDetail() {
+  const date = (document.getElementById('detailDate') || {}).value;
+  const tb = document.getElementById('detailTbody');
+  if (!date) { alert('กรุณาเลือกวันที่'); return; }
+  tb.innerHTML = '<tr><td colspan="6" class="center" style="padding:20px;"><span class="spinner"></span> กำลังโหลด...</td></tr>';
+  gasGet('startDetail', { email: currentEmail, date: date })
+    .then(function(res) {
+      if (!res || !res.success) { tb.innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">${(res && res.error) || 'โหลดไม่สำเร็จ'}</td></tr>`; return; }
+      document.getElementById('detailTotal').innerText = `รวม ${fmt(res.totals.qty)} คน`;
+      if (!res.rows.length) { tb.innerHTML = '<tr><td colspan="6" class="center" style="padding:20px; color:#94a3b8;">ไม่มีคนเริ่มงานในวันที่เลือก</td></tr>'; return; }
+      tb.innerHTML = res.rows.map(r => `<tr><td>${r.storeNo}</td><td>${r.branch}</td><td>${r.region}</td><td style="font-weight:bold;">${r.vendor}</td><td>${r.position}</td><td class="right">${fmt(r.qty)}</td></tr>`).join('');
+    })
+    .catch(function(err) { tb.innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">${err.message}</td></tr>`; });
 }
 
 // ─── LOGIN ─── (Decoupled: auth fast → UI shows → initApp loads all data)
