@@ -5,10 +5,21 @@ const WEEKLY_UPDATE_SHEET_NAME = 'Weekly_Update';
 const USER_SHEET_NAME = 'Users';
 const NAMELIST_SHEET_NAME = 'Name_List';
 
-// หัวตารางของ Sheet "Name_List" (รายชื่อพนักงานที่ vendor อัปโหลด)
+// หัวตารางของ Sheet "Name_List" — ตรงตาม template ต้นฉบับ (A→X = 24 คอลัมน์)
 const NAMELIST_HEADERS = [
-  'Timestamp', 'Agency Name', 'Full Name', 'Store No', 'Branch', 'Position', 'Start Date', 'Status'
+  'ลำดับ', 'Status', 'คำนำหน้า', 'ชื่อ-สกุล (English)', 'ชื่อ-สกุล (ไทย)', 'เพศ', 'วันเกิด', 'อายุ', 'สัญชาติ',
+  'เลขใบอนุญาตทำงาน', 'เลขที่หนังสือเดินทาง', 'วันหมดอายุหนังสือเดินทาง', 'วันหมดอายุวีซ่า',
+  'เลขประจำตัวคนต่างด้าว', 'ใบอนุญาตทำงานเลขที่', 'วันหมดอายุใบอนุญาตทำงาน',
+  'เลขที่สาขา', 'ชื่อสาขา', 'จังหวัด', 'ตำแหน่ง', 'ประเภทผู้สมัคร',
+  'เฉพาะมติ 11 พ.ย. เอกสารที่ขาด', 'วันเริ่มงาน', 'Agency Name'
 ];
+// index (0-based) ของคอลัมน์สำคัญ
+const NL = {
+  order: 0, status: 1, nameTH: 4, storeNo: 16, branch: 17, province: 18,
+  position: 19, startDate: 22, agency: 23, total: 24
+};
+// วันที่ที่ต้องแปลงเป็น format มาตรฐาน (YYYY-MM-DD) ให้เหมือนกันทุก vendor
+const NL_DATE_COLS = [6, 11, 12, 15, 22]; // วันเกิด, หมดอายุ passport, วีซ่า, work permit, วันเริ่มงาน
 // สถานะที่อนุญาต (dropdown)
 const NAMELIST_STATUSES = ['รอเริ่มงาน', 'เริ่มงาน', 'ไม่มาเริ่มงาน'];
 
@@ -100,18 +111,19 @@ function getNameListAPI(email) {
     const rows = [];
     for (let i = 1; i < values.length; i++) {
       const r = values[i];
-      if (!r[2] && !r[1]) continue; // ข้ามแถวว่าง
-      const agency = String(r[1] || '').trim();
+      const agency = String(r[NL.agency] || '').trim();
+      const nameTH = String(r[NL.nameTH] || '').trim();
+      if (!agency && !nameTH) continue; // ข้ามแถวว่าง
       if (!user.isAdmin && agency !== user.vendor) continue; // vendor เห็นเฉพาะของตนเอง
       rows.push({
-        rowIndex:  i + 1,                // เลขแถวจริงใน sheet (ไว้ update)
+        rowIndex:  i + 1,
         agency:    agency,
-        name:      String(r[2] || ''),
-        storeNo:   String(r[3] || ''),
-        branch:    String(r[4] || ''),
-        position:  String(r[5] || ''),
-        startDate: normalizeDate_(r[6]),
-        status:    String(r[7] || NAMELIST_STATUSES[0])
+        name:      nameTH || String(r[3] || ''),
+        storeNo:   String(r[NL.storeNo] || ''),
+        branch:    String(r[NL.branch] || ''),
+        position:  String(r[NL.position] || ''),
+        startDate: normalizeDate_(r[NL.startDate]),
+        status:    String(r[NL.status] || NAMELIST_STATUSES[0])
       });
     }
     return { success: true, rows: rows, isAdmin: user.isAdmin, vendor: user.vendor, statuses: NAMELIST_STATUSES };
@@ -120,33 +132,38 @@ function getNameListAPI(email) {
   }
 }
 
-// อัปโหลดรายชื่อ (ต่อท้าย) — Agency Name ใส่อัตโนมัติตาม vendor ของผู้ใช้
+// อัปโหลดรายชื่อ (ต่อท้าย) — รับข้อมูลทั้งแถวตาม template, Agency Name ใส่อัตโนมัติตาม vendor
+// payload.rows = array ของ array (แต่ละแถวเรียงตามคอลัมน์ template A→X)
 function uploadNameList(payload) {
   try {
     const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
     const user = loginUserOnly(payload.userEmail).user;
     const vendor = user.vendor;
     const sheet = ensureNameListSheet_(ss);
-    const targets = getTargets_(ss);
-    const ts = new Date();
 
-    const rows = (payload.rows || []).map(r => {
-      const storeNo = padStoreNo_(r.storeNo);
-      const t = targets.find(x => x.storeNo === storeNo);
-      let status = String(r.status || '').trim();
-      if (NAMELIST_STATUSES.indexOf(status) === -1) status = NAMELIST_STATUSES[0];
-      return [
-        ts, vendor, String(r.name || '').trim(), storeNo,
-        t ? t.branch : String(r.branch || ''),
-        String(r.position || '').trim(),
-        r.startDate ? normalizeDate_(r.startDate) : '',
-        status
-      ];
-    }).filter(row => row[2]); // ต้องมีชื่อ
+    const out = [];
+    (payload.rows || []).forEach(src => {
+      const arr = Array.isArray(src) ? src : [];
+      // เติมให้ครบ 24 คอลัมน์
+      const row = [];
+      for (let c = 0; c < NL.total; c++) row[c] = arr[c] != null ? arr[c] : '';
+      // ต้องมีชื่อ (TH หรือ EN)
+      if (!String(row[NL.nameTH] || '').trim() && !String(row[3] || '').trim()) return;
+      // แปลงวันที่ให้เป็น format เดียวกัน
+      NL_DATE_COLS.forEach(c => { if (row[c]) row[c] = normalizeDate_(row[c]); });
+      // เลขที่สาขา → 3 หลัก
+      if (row[NL.storeNo]) row[NL.storeNo] = padStoreNo_(row[NL.storeNo]);
+      // Status ให้อยู่ในลิสต์
+      let status = String(row[NL.status] || '').trim();
+      row[NL.status] = (NAMELIST_STATUSES.indexOf(status) !== -1) ? status : NAMELIST_STATUSES[0];
+      // Agency Name = vendor เสมอ (กันปลอมแปลง)
+      row[NL.agency] = vendor;
+      out.push(row);
+    });
 
-    if (rows.length === 0) return { success: false, error: 'ไม่พบรายชื่อในไฟล์ (คอลัมน์ชื่อว่าง)' };
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, NAMELIST_HEADERS.length).setValues(rows);
-    return { success: true, added: rows.length };
+    if (out.length === 0) return { success: false, error: 'ไม่พบรายชื่อในไฟล์ (คอลัมน์ชื่อว่าง)' };
+    sheet.getRange(sheet.getLastRow() + 1, 1, out.length, NL.total).setValues(out);
+    return { success: true, added: out.length };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -163,11 +180,11 @@ function updateNameListStatus(payload) {
     (payload.updates || []).forEach(u => {
       const idx = Number(u.rowIndex);
       if (!idx || idx < 2 || idx > values.length) return;
-      const rowAgency = String(values[idx - 1][1] || '').trim();
+      const rowAgency = String(values[idx - 1][NL.agency] || '').trim();
       if (!user.isAdmin && rowAgency !== user.vendor) return; // กันแก้ของ vendor อื่น
       let status = String(u.status || '').trim();
       if (NAMELIST_STATUSES.indexOf(status) === -1) return;
-      sheet.getRange(idx, 8).setValue(status); // คอลัมน์ Status = 8
+      sheet.getRange(idx, NL.status + 1).setValue(status); // Status = คอลัมน์ B
       updated++;
     });
     return { success: true, updated: updated };
