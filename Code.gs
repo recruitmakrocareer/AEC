@@ -64,6 +64,9 @@ function doGet(e) {
       case 'startDetail':
         result = getStartDetailAPI(e.parameter.email, e.parameter.date);
         break;
+      case 'nameTemplate':
+        result = getNameTemplateUrl();
+        break;
       case 'exportAdmin':
         result = { url: exportAdminExcelAPI(e.parameter.email, e.parameter.filterStart || '', e.parameter.filterEnd || '') };
         break;
@@ -193,6 +196,52 @@ function updateNameListStatus(payload) {
   }
 }
 
+// สร้าง/ดึงไฟล์ template (Google Sheet ที่มี dropdown) แล้วคืน URL ดาวน์โหลดเป็น .xlsx
+function getNameTemplateUrl() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const VKEY = 'NAMELIST_TPL_ID_V2';
+    let id = props.getProperty(VKEY);
+    let ssTpl = null;
+    if (id) { try { ssTpl = SpreadsheetApp.openById(id); } catch (e) { ssTpl = null; } }
+
+    if (!ssTpl) {
+      ssTpl = SpreadsheetApp.create('AEC_NameList_Template');
+      const sh = ssTpl.getActiveSheet();
+      sh.setName('Name List');
+      sh.getRange(1, 1, 1, NAMELIST_HEADERS.length).setValues([NAMELIST_HEADERS])
+        .setFontWeight('bold').setBackground('#1e293b').setFontColor('white');
+      sh.setFrozenRows(1);
+
+      // ใส่ลำดับ 1-30 ให้กรอก
+      const seq = [];
+      for (let i = 1; i <= 30; i++) seq.push([i]);
+      sh.getRange(2, 1, seq.length, 1).setValues(seq);
+
+      const rows = 30;
+      const dv = (list, strict) => SpreadsheetApp.newDataValidation()
+        .requireValueInList(list, true).setAllowInvalid(strict === false).build();
+
+      // dropdown: Status (B), ตำแหน่ง (T), เพศ (F), ประเภทผู้สมัคร (U)
+      sh.getRange(2, NL.status + 1,   rows, 1).setDataValidation(dv(NAMELIST_STATUSES, false));
+      sh.getRange(2, NL.position + 1, rows, 1).setDataValidation(dv(['ล่าม', 'Bakery', 'Other'], false));
+      sh.getRange(2, 6,               rows, 1).setDataValidation(dv(['ชาย', 'หญิง'], true));
+      sh.getRange(2, 21,              rows, 1).setDataValidation(dv(['พนักงานใหม่', 'พนักงานเดิม', 'ต่างด้าว'], true));
+
+      // คอลัมน์วันที่ → format มาตรฐาน
+      NL_DATE_COLS.forEach(c => sh.getRange(2, c + 1, rows, 1).setNumberFormat('yyyy-mm-dd'));
+
+      id = ssTpl.getId();
+      props.setProperty(VKEY, id);
+    }
+
+    try { DriveApp.getFileById(id).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+    return { success: true, url: 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 // ═════════════════════════════════════════════
 //  ADMIN — รายละเอียดคนเริ่มงานในวันที่เลือก
 //  (สาขาไหน / ตำแหน่งอะไร / vendor ไหน / จำนวนเท่าไหร่)
@@ -207,8 +256,9 @@ function getStartDetailAPI(email, date) {
     if (!sheet) return { success: true, rows: [], totals: { qty: 0 } };
 
     const values = sheet.getDataRange().getValues();
-    const rows = [];
-    let totalQty = 0;
+    // รวมเป็นราย สาขา+vendor แล้วแยกตำแหน่ง ล่าม/Bakery/Other ให้ครบ (เหมือนฟอร์มสัมภาษณ์)
+    const map = {};
+    let totalQty = 0, tLam = 0, tBak = 0, tOth = 0;
     for (let i = 1; i < values.length; i++) {
       const r = values[i];
       if (normalizeDate_(r[1]) !== targetDate) continue;
@@ -217,18 +267,19 @@ function getStartDetailAPI(email, date) {
       if (!user.isAdmin && vendor !== user.vendor) continue;       // vendor เห็นเฉพาะของตนเอง
       const qty = Number(r[11]) || 0;
       if (qty <= 0) continue;
-      rows.push({
-        storeNo:  padStoreNo_(r[2]),
-        branch:   String(r[3] || ''),
-        region:   String(r[5] || ''),
-        vendor:   vendor,
-        position: String(r[9] || ''),
-        qty:      qty
-      });
+      const storeNo = padStoreNo_(r[2]);
+      const key = storeNo + '||' + vendor;
+      if (!map[key]) map[key] = { storeNo: storeNo, branch: String(r[3] || ''), region: String(r[5] || ''), vendor: vendor, lam: 0, bak: 0, oth: 0, total: 0 };
+      const pos = String(r[9] || '').trim();
+      if (pos === 'ล่าม')        { map[key].lam += qty; tLam += qty; }
+      else if (pos === 'Bakery') { map[key].bak += qty; tBak += qty; }
+      else                       { map[key].oth += qty; tOth += qty; }
+      map[key].total += qty;
       totalQty += qty;
     }
-    rows.sort((a, b) => a.storeNo.localeCompare(b.storeNo) || a.vendor.localeCompare(b.vendor));
-    return { success: true, rows: rows, totals: { qty: totalQty }, date: targetDate };
+    const rows = Object.keys(map).map(k => map[k])
+      .sort((a, b) => a.storeNo.localeCompare(b.storeNo) || a.vendor.localeCompare(b.vendor));
+    return { success: true, rows: rows, totals: { qty: totalQty, lam: tLam, bak: tBak, oth: tOth }, date: targetDate };
   } catch (e) {
     return { success: false, error: e.message };
   }
