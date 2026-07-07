@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คู่มือการใช้งาน — AEC Tracking System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --primary:#1e293b; --accent:#4f46e5; --muted:#7b809a; --border:#e5e9f0; --bg:#f0f2f5; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:#344767; font-family:'Sarabun',sans-serif; font-size:16px; line-height:1.75; }
+  .hero { background:linear-gradient(120deg,#1e293b 0%,#334155 60%,#3b4a6b 100%); color:white; padding:44px 24px; text-align:center; }
+  .hero h1 { margin:0 0 8px; font-size:1.7rem; }
+  .hero p { margin:0; color:#aebed6; font-size:.95rem; }
+  .wrap { max-width:860px; margin:0 auto; padding:28px 18px 80px; }
+  .card { background:white; border-radius:16px; padding:26px 30px; margin-bottom:22px; box-shadow:0 8px 26px -6px rgba(20,20,43,.12); }
+  h2 { color:var(--primary); font-size:1.25rem; margin:0 0 14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  h3 { color:var(--accent); font-size:1.02rem; margin:22px 0 8px; }
+  ol, ul { padding-left:1.4em; margin:8px 0; }
+  li { margin-bottom:6px; }
+  .tip { background:#eff6ff; border-left:4px solid #3b82f6; padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0; font-size:.93rem; }
+  .warn { background:#fef2f2; border-left:4px solid #ef4444; padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0; font-size:.93rem; }
+  .ok { background:#f0fdf4; border-left:4px solid #22c55e; padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0; font-size:.93rem; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; margin:12px 0; }
+  th { background:#f8f9fc; color:var(--muted); text-transform:uppercase; font-size:.72rem; letter-spacing:.5px; text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); }
+  td { padding:10px 12px; border-bottom:1px solid #f0f2f6; vertical-align:top; }
+  code, .kbd { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:6px; padding:2px 8px; font-size:.85em; font-family:inherit; font-weight:600; }
+  .badge { display:inline-block; padding:3px 12px; border-radius:99px; font-size:.8rem; font-weight:700; }
+  .b-wait { background:#fef3c7; color:#b45309; }
+  .b-start { background:#dcfce7; color:#15803d; }
+  .b-no { background:#fee2e2; color:#b91c1c; }
+  .step { display:flex; gap:14px; margin-bottom:14px; }
+  .step-num { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; font-weight:800; display:flex; align-items:center; justify-content:center; font-size:.9rem; }
+  a { color:var(--accent); font-weight:600; }
+  .toc a { text-decoration:none; display:block; padding:7px 0; border-bottom:1px dashed #eef0f4; }
+  @media print { .hero{padding:20px;} .card{box-shadow:none; border:1px solid var(--border);} }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>📘 คู่มือการใช้งาน AEC Tracking System</h1>
+  <p>สำหรับ Vendor / Agency ทุกเจ้า — อัปเดตล่าสุด กรกฎาคม 2026</p>
+</div>
+
+<div class="wrap">
+
+<div class="card toc">
+  <h2>สารบัญ</h2>
+  <a href="#s1">1. การเข้าสู่ระบบ (Login)</a>
+  <a href="#s2">2. หน้า "บันทึกข้อมูล" — ผลสัมภาษณ์ &amp; คนเริ่มงาน</a>
+  <a href="#s3">3. หน้า "อัปโหลดไฟล์ (Onboard)" — ส่งยอดจากไฟล์ Excel</a>
+  <a href="#s4">4. หน้า "Name List" — อัปโหลดรายชื่อพนักงาน</a>
+  <a href="#s5">5. หน้า "สาขา &amp; ประวัติ" — ดูเป้าหมายและผลงาน</a>
+  <a href="#s6">6. กฎสำคัญที่ต้องรู้</a>
+  <a href="#s7">7. ปัญหาที่พบบ่อย (FAQ)</a>
+</div>
+
+<div class="card" id="s1">
+  <h2>1. การเข้าสู่ระบบ (Login)</h2>
+  <div class="step"><div class="step-num">1</div><div>เปิดลิงก์ระบบ: <a href="https://recruitmakrocareer.github.io/AEC/">https://recruitmakrocareer.github.io/AEC/</a></div></div>
+  <div class="step"><div class="step-num">2</div><div>กรอก <b>อีเมลของบริษัทคุณ</b> ที่ลงทะเบียนไว้กับ Admin แล้วกด <span class="kbd">เข้าสู่ระบบ (Login)</span></div></div>
+  <div class="step"><div class="step-num">3</div><div>ระบบจะแสดงชื่อบริษัท (Vendor) ของคุณที่มุมซ้ายบน</div></div>
+  <div class="warn"><b>เข้าไม่ได้?</b> "อีเมลนี้ไม่มีสิทธิ์เข้าใช้งาน" = อีเมลยังไม่ถูกลงทะเบียน กรุณาติดต่อ Admin (ทีม Recruitment CP Axtra) เพื่อเพิ่มอีเมลของคุณ</div>
+  <div class="tip">💡 คุณจะเห็น<b>เฉพาะข้อมูลของบริษัทตัวเอง</b>เท่านั้น — ไม่เห็นข้อมูลของ vendor เจ้าอื่น</div>
+</div>
+
+<div class="card" id="s2">
+  <h2>2. หน้า "📝 บันทึกข้อมูล" — ผลสัมภาษณ์ &amp; คนเริ่มงาน</h2>
+  <p>ใช้บันทึกยอด <b>ผู้ผ่านสัมภาษณ์ (Interview Passed)</b> และ <b>ผู้เริ่มงาน (Started Work)</b> เป็นรายสาขา แยกตำแหน่ง <b>ล่าม / Bakery / Other</b></p>
+
+  <h3>ขั้นตอนบันทึกผลสัมภาษณ์ (ตารางที่ 1)</h3>
+  <ol>
+    <li>เลือก <b>วันที่สัมภาษณ์</b> — ระบบจะดึงข้อมูลเดิมของวันนั้น (ถ้ามี) มาให้แก้ไขได้</li>
+    <li>กด <span class="kbd">+ เพิ่มสาขา</span> แล้วเลือกสาขาจากรายการ</li>
+    <li>กรอกจำนวนคนแยกตามตำแหน่ง ล่าม / Bakery / Other</li>
+    <li>ใส่หมายเหตุได้ที่ช่อง Remark (ถ้ามี)</li>
+  </ol>
+
+  <h3>ขั้นตอนบันทึกคนเริ่มงาน (ตารางที่ 2)</h3>
+  <ol>
+    <li>เลือก <b>วันที่เริ่มงาน</b> — <span style="color:#dc2626; font-weight:700;">ต้องเป็นวันจันทร์เท่านั้น</span> (ระบบตั้งวันจันทร์ถัดไปให้อัตโนมัติ)</li>
+    <li>เพิ่มสาขาและกรอกจำนวนเช่นเดียวกับตารางแรก</li>
+  </ol>
+
+  <h3>การบันทึก</h3>
+  <div class="step"><div class="step-num">✓</div><div>ตรวจสอบยอดรวมท้ายตาราง แล้วกดปุ่ม <span class="kbd">💾 บันทึกข้อมูลทั้งหมด (SAVE &amp; UPDATE DATA)</span> — ปุ่มเดียวบันทึกทั้ง 2 ตาราง</div></div>
+  <div class="warn"><b>⚠️ สำคัญมาก:</b> การบันทึกเป็นการ <b>"เขียนทับข้อมูลทั้งวัน"</b> ของวันที่เลือก — ข้อมูลเดิมของวันนั้น (เฉพาะของบริษัทคุณ) จะถูกแทนที่ด้วยที่เห็นบนจอทั้งหมด ดังนั้นถ้าจะแก้ไข ให้เลือกวันที่ → รอระบบโหลดข้อมูลเดิมขึ้นมา → แก้ → แล้วค่อยบันทึก</div>
+  <div class="ok">✅ ถ้าบันทึกสำเร็จจะขึ้นข้อความยืนยัน — ถ้าล้มเหลวระบบจะแจ้ง error และ<b>ข้อมูลที่กรอกไว้จะไม่หาย</b> กดบันทึกซ้ำได้</div>
+</div>
+
+<div class="card" id="s3">
+  <h2>3. หน้า "📁 อัปโหลดไฟล์ (Onboard)" — ส่งยอดจากไฟล์ Excel</h2>
+  <p>ทางลัดสำหรับส่งยอด<b>คนเริ่มงาน</b>ทีละหลายสาขาจากไฟล์ Excel โดยไม่ต้องคีย์ทีละแถว</p>
+  <ol>
+    <li>เลือก <b>วันที่เริ่มงาน</b> (วันจันทร์เท่านั้น)</li>
+    <li>แนบไฟล์ Excel (.xlsx) ที่มีคอลัมน์ <code>เลขที่สาขา</code> และ <code>ตำแหน่ง</code></li>
+    <li>กด <span class="kbd">🚀 ประมวลผลและส่งยอดคนเริ่มงานทันที</span></li>
+  </ol>
+  <p>ระบบจะนับจำนวนคนต่อสาขา แยกตำแหน่งให้อัตโนมัติ (ตำแหน่งที่มีคำว่า "ล่าม" → ล่าม, "Bakery/เบเกอรี่" → Bakery, อื่นๆ → Other) และเก็บไฟล์ต้นฉบับไว้ให้ Admin ตรวจสอบ</p>
+</div>
+
+<div class="card" id="s4">
+  <h2>4. หน้า "📋 Name List" — อัปโหลดรายชื่อพนักงาน</h2>
+  <p>ใช้ส่ง<b>รายชื่อพนักงานรายบุคคล</b> พร้อมข้อมูลเอกสาร (passport, work permit ฯลฯ) และติดตามสถานะการเริ่มงานของแต่ละคน</p>
+
+  <h3>4.1 ดาวน์โหลดฟอร์ม</h3>
+  <div class="step"><div class="step-num">1</div><div>กด <span class="kbd">⬇️ ดาวน์โหลดฟอร์มเปล่า</span> — จะได้ไฟล์ Excel (.xlsx) ที่มี <b>dropdown ให้เลือก</b>ในช่อง Status, ตำแหน่ง, เพศ, ประเภทผู้สมัคร</div></div>
+
+  <h3>4.2 กรอกข้อมูล</h3>
+  <ul>
+    <li>กรอก 1 คนต่อ 1 แถว — <b>ต้องมีชื่อ-สกุล</b> (ไทยหรืออังกฤษ) ทุกแถว</li>
+    <li>คอลัมน์วันที่ทุกช่อง ใช้รูปแบบ <code>YYYY-MM-DD</code> เช่น <code>2026-07-13</code> (ระบบจะจัด format ให้เหมือนกันทุกเจ้าอัตโนมัติ)</li>
+    <li>ช่อง <b>Agency Name เว้นว่างได้</b> — ระบบใส่ชื่อบริษัทของคุณให้เองตอนอัปโหลด (แก้เป็นชื่ออื่นไม่ได้)</li>
+  </ul>
+
+  <h3>4.3 อัปโหลด</h3>
+  <div class="step"><div class="step-num">2</div><div>เลือกไฟล์ที่กรอกแล้ว → กด <span class="kbd">🚀 อัปโหลดรายชื่อ</span> — รายชื่อจะ<b>ต่อท้าย</b>ของเดิม (อัปโหลดเพิ่มได้เรื่อยๆ) และเก็บแยกของแต่ละบริษัท</div></div>
+
+  <h3>4.4 อัปเดตสถานะรายคน</h3>
+  <p>แต่ละรายชื่อมี dropdown สถานะ 3 แบบ:</p>
+  <p>
+    <span class="badge b-wait">รอเริ่มงาน</span>&nbsp;
+    <span class="badge b-start">เริ่มงาน</span>&nbsp;
+    <span class="badge b-no">ไม่มาเริ่มงาน</span>
+  </p>
+  <ol>
+    <li>เปลี่ยนสถานะในตารางได้เลย (เปลี่ยนได้หลายคนพร้อมกัน — ที่แก้ไว้ไม่หายแม้เปลี่ยนตัวกรอง)</li>
+    <li>กด <span class="kbd">💾 บันทึกสถานะ</span> เพื่อยืนยันทั้งหมดในครั้งเดียว</li>
+    <li>ใช้ช่อง <b>"กรองสถานะ"</b> เพื่อดูเฉพาะกลุ่มที่ต้องการ เช่น เฉพาะคนที่ "รอเริ่มงาน"</li>
+  </ol>
+  <div class="tip">💡 บริษัทของคุณเห็นเฉพาะรายชื่อของตัวเอง — Admin เท่านั้นที่เห็นรายชื่อของทุกเจ้า</div>
+</div>
+
+<div class="card" id="s5">
+  <h2>5. หน้า "🏢 สาขา &amp; ประวัติ"</h2>
+  <ul>
+    <li><b>🎯 เป้าหมายของบริษัท</b> — Target / Passed / Started / Remaining / % ความคืบหน้าของบริษัทคุณ พร้อมตารางรายสาขาที่คุณรับผิดชอบ</li>
+    <li><b>🌍 ภาพรวมทั้งหมด (Grand Total)</b> — ภาพรวมเป้าหมายทุกสาขาของโครงการ</li>
+    <li><b>⏱️ ประวัติการอัปเดต</b> — รายการที่บริษัทคุณเคยบันทึก (วันที่ สาขา ตำแหน่ง จำนวน)</li>
+  </ul>
+  <div class="tip">💡 ข้อมูลรีเฟรชอัตโนมัติทุก 2 นาที หรือกด <span class="kbd">🔄 Refresh Data</span> ในหน้าบันทึกข้อมูลเพื่อดึงทันที</div>
+</div>
+
+<div class="card" id="s6">
+  <h2>6. กฎสำคัญที่ต้องรู้</h2>
+  <table>
+    <tr><th>เรื่อง</th><th>กฎ</th></tr>
+    <tr><td>วันเริ่มงาน</td><td>เลือกได้เฉพาะ <b>วันจันทร์</b> เท่านั้น (ทั้งหน้าบันทึกและหน้าอัปโหลด)</td></tr>
+    <tr><td>การบันทึกซ้ำวันเดิม</td><td>เป็นการ<b>เขียนทับข้อมูลทั้งวัน</b>ของบริษัทคุณ — โหลดข้อมูลเดิมขึ้นมาก่อนแก้เสมอ</td></tr>
+    <tr><td>สาขาที่บันทึกได้</td><td>ต้องเป็นสาขาที่อยู่ในโครงการเท่านั้น — ถ้าสาขาไหนไม่ถูกบันทึก ระบบจะแจ้งเตือน</td></tr>
+    <tr><td>ขอบเขตข้อมูล</td><td>เห็น/แก้ไขได้เฉพาะข้อมูลของบริษัทตัวเอง</td></tr>
+    <tr><td>รูปแบบวันที่</td><td><code>YYYY-MM-DD</code> (เวลาไทย) เหมือนกันทุกบริษัท</td></tr>
+    <tr><td>Agency Name ใน Name List</td><td>ระบบใส่ให้อัตโนมัติตามบัญชีที่ login — ปลอมชื่อเจ้าอื่นไม่ได้</td></tr>
+  </table>
+</div>
+
+<div class="card" id="s7">
+  <h2>7. ปัญหาที่พบบ่อย (FAQ)</h2>
+  <h3>Q: เปิดหน้าเว็บแล้ว login ไม่ได้ ขึ้น "เชื่อมต่อ Server ไม่ได้"</h3>
+  <p>ลองเปิดด้วย <b>Google Chrome</b> (Microsoft Edge บางเครื่องบล็อกการเชื่อมต่อ) หรือใช้ลิงก์สำรอง (ขอจาก Admin) — ถ้ายังไม่ได้ให้ตรวจอินเทอร์เน็ตของท่าน</p>
+
+  <h3>Q: โหลดข้อมูลครั้งแรกช้า</h3>
+  <p>การเข้าครั้งแรกของวันอาจใช้เวลา 3–5 วินาที (ระบบเตรียมข้อมูล) ครั้งถัดไปจะเร็วขึ้น</p>
+
+  <h3>Q: กดบันทึกแล้วขึ้น error</h3>
+  <p>ข้อมูลที่กรอกไว้<b>ยังอยู่ครบ</b> — อ่านข้อความ error แล้วกดบันทึกซ้ำ ถ้ายังไม่ได้ให้แคปหน้าจอส่งให้ Admin</p>
+
+  <h3>Q: อัปโหลด Name List แล้วขึ้น "ไม่พบรายชื่อในไฟล์"</h3>
+  <p>ตรวจว่า (1) ใช้ฟอร์มที่ดาวน์โหลดจากระบบ (2) คอลัมน์ชื่อ-สกุล ไม่ว่าง (3) ไม่ได้ลบแถวหัวตารางออก</p>
+
+  <h3>Q: เลือกวันเริ่มงานแล้วระบบเด้งเตือน</h3>
+  <p>วันเริ่มงานต้องเป็น<b>วันจันทร์เท่านั้น</b> — เลือกวันจันทร์ของสัปดาห์ที่พนักงานเริ่มงานจริง</p>
+
+  <h3>Q: อยากแก้รายชื่อ/ลบรายชื่อที่อัปโหลดผิด</h3>
+  <p>แจ้ง Admin เพื่อแก้ไขในระบบหลังบ้าน (vendor แก้ได้เฉพาะสถานะ)</p>
+
+  <div class="tip" style="margin-top:22px;">📞 <b>ติดต่อผู้ดูแลระบบ:</b> ทีม Recruitment CP Axtra — กรณีเพิ่มผู้ใช้ใหม่ / แก้ข้อมูลย้อนหลัง / พบปัญหาการใช้งาน (แนบภาพหน้าจอทุกครั้ง)</div>
+</div>
+
+<p style="text-align:center; color:var(--muted); font-size:.85rem;">AEC Tracking System — คู่มือฉบับ Vendor · จัดทำโดยทีม Recruitment</p>
+
+</div>
+</body>
+</html>
