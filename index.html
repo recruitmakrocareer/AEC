@@ -584,13 +584,17 @@ let autoRefreshTimer = null;
 
 // ─── Helpers ───
 function fmt(n) { return Number(n || 0).toLocaleString('th-TH'); }
-function today() { return new Date().toISOString().slice(0, 10); }
+// ใช้เวลาท้องถิ่น (ไม่ใช่ UTC) — ไม่งั้นก่อน 7 โมงเช้าไทยจะได้วันเมื่อวาน
+function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+function today() { return ymd(new Date()); }
+// วันจันทร์ถัดไป (ถ้าวันนี้เป็นวันจันทร์ = วันนี้) — ใช้เป็นค่าเริ่มต้นของวันเริ่มงาน
+function nextMonday() { const d = new Date(); d.setDate(d.getDate() + ((8 - d.getDay()) % 7)); return ymd(d); }
 function formatDateThai(s) { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; }
 
-// Set default dates
+// Set default dates — วันเริ่มงานต้องเป็นวันจันทร์เท่านั้น จึง default เป็นวันจันทร์ถัดไป
 document.getElementById('intDate').value = today();
-document.getElementById('workDate').value = today();
-document.getElementById('uploadDate').value = today();
+document.getElementById('workDate').value = nextMonday();
+document.getElementById('uploadDate').value = nextMonday();
 // ตัวกรอง Dashboard: ค่าเริ่มต้น = ต้นปีนี้ → วันนี้ (ให้ข้อมูลขึ้นครบ ไม่โชว์ 0 ทั้งหมด)
 (function () {
   const now = new Date();
@@ -642,9 +646,10 @@ function loadNameList() {
   if (tb) tb.innerHTML = '<tr><td colspan="6" class="center" style="padding:20px;"><span class="spinner"></span> กำลังโหลด...</td></tr>';
   gasGet('getNameList', { email: currentEmail })
     .then(function(res) {
-      __nameLoaded = true;
       if (!res || !res.success) { if (tb) tb.innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">${(res && res.error) || 'โหลดไม่สำเร็จ'}</td></tr>`; return; }
+      __nameLoaded = true;
       __nameData = res.rows || [];
+      __nameData.forEach(r => r.origStatus = r.status); // เก็บค่าเดิมไว้เทียบตอนบันทึก
       __nameStatuses = res.statuses || __nameStatuses;
       const f = document.getElementById('nameStatusFilter');
       if (f) f.innerHTML = '<option value="">ทั้งหมด</option>' + __nameStatuses.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -654,6 +659,16 @@ function loadNameList() {
 }
 
 function statusColor(s) { return s === 'เริ่มงาน' ? '#16a34a' : s === 'ไม่มาเริ่มงาน' ? '#dc2626' : '#d97706'; }
+
+// เก็บสถานะที่แก้ลง __nameData ทันที — จะได้ไม่หายตอนเปลี่ยนตัวกรอง/re-render
+function nameStatusChanged(sel) {
+  sel.style.borderColor = statusColor(sel.value);
+  sel.style.color = statusColor(sel.value);
+  const rowIndex = Number(sel.getAttribute('data-row'));
+  const sheet = sel.getAttribute('data-sheet') || '';
+  const row = __nameData.find(r => r.rowIndex === rowIndex && (r.sheet || '') === sheet);
+  if (row) row.status = sel.value;
+}
 
 function renderNameList() {
   const tb = document.getElementById('nameListTbody');
@@ -669,7 +684,7 @@ function renderNameList() {
       <td>${r.agency}</td><td style="font-weight:600;">${r.name}</td>
       <td>${r.storeNo}${r.branch ? (' - ' + r.branch) : ''}</td>
       <td>${r.position}</td><td>${formatDateThai(r.startDate) || '-'}</td>
-      <td><select data-row="${r.rowIndex}" class="name-status" onchange="this.style.borderColor=statusColor(this.value); this.style.color=statusColor(this.value);" style="width:100%; font-weight:700; border-color:${statusColor(r.status)}; color:${statusColor(r.status)};">${opts}</select></td>
+      <td><select data-row="${r.rowIndex}" data-sheet="${r.sheet || ''}" class="name-status" onchange="nameStatusChanged(this)" style="width:100%; font-weight:700; border-color:${statusColor(r.status)}; color:${statusColor(r.status)};">${opts}</select></td>
     </tr>`;
   }).join('');
 }
@@ -767,13 +782,10 @@ function uploadNameFile() {
 }
 
 function saveNameStatus() {
-  const selects = document.querySelectorAll('#nameListTbody select.name-status');
-  const updates = [];
-  selects.forEach(s => {
-    const rowIndex = Number(s.getAttribute('data-row'));
-    const orig = (__nameData.find(r => r.rowIndex === rowIndex) || {}).status;
-    if (orig !== s.value) updates.push({ rowIndex: rowIndex, status: s.value });
-  });
+  // เทียบจาก __nameData (ครอบคลุมทุกแถวแม้ถูกกรองซ่อนอยู่) — ส่งชื่อไปให้ server ยืนยันว่าแถวไม่ขยับ
+  const updates = __nameData
+    .filter(r => r.status !== r.origStatus)
+    .map(r => ({ sheet: r.sheet || '', rowIndex: r.rowIndex, status: r.status, name: r.name }));
   if (updates.length === 0) { alert('ไม่มีการเปลี่ยนแปลงสถานะ'); return; }
   const btn = document.getElementById('btnSaveStatus');
   btn.disabled = true; btn.innerText = 'กำลังบันทึก...';
@@ -822,10 +834,12 @@ function login() {
 
   // เรียกครั้งเดียวได้ทั้ง login + dashboard + ตารางกรอก 2 ตาราง → โหลดเร็วขึ้นมาก
   isLoading = true;
+  __lastFilters.start = (document.getElementById('filterStart') || {}).value || '';
+  __lastFilters.end = (document.getElementById('filterEnd') || {}).value || '';
   gasGet('initApp', {
     email: email,
-    filterStart: (document.getElementById('filterStart') || {}).value || '',
-    filterEnd: (document.getElementById('filterEnd') || {}).value || '',
+    filterStart: __lastFilters.start,
+    filterEnd: __lastFilters.end,
     forceRefresh: 'false',
     gridIntDate: document.getElementById('intDate').value || '',
     gridWorkDate: document.getElementById('workDate').value || ''
@@ -875,18 +889,29 @@ function login() {
 
 // ─── INIT APP — single bundled call ───
 let isLoading = false;
+const __lastFilters = { start: '', end: '' }; // filter ล่าสุดที่ผู้ใช้กด Apply จริง
 function initAppData(forceRefresh, skipGrid) {
   if (isLoading) return;
   if (!currentEmail) return;
   isLoading = true;
 
-  const start = (document.getElementById('filterStart') || {}).value || '';
-  const end = (document.getElementById('filterEnd') || {}).value || '';
+  // auto-refresh (skipGrid=true) ใช้ filter ที่ apply ล่าสุด — ไม่หยิบค่าที่ผู้ใช้กำลังพิมพ์ค้างครึ่งเดียว
+  let start, end;
+  if (skipGrid) {
+    start = __lastFilters.start; end = __lastFilters.end;
+  } else {
+    start = (document.getElementById('filterStart') || {}).value || '';
+    end = (document.getElementById('filterEnd') || {}).value || '';
+    __lastFilters.start = start; __lastFilters.end = end;
+  }
 
   const btn1 = document.getElementById('btnRefresh1');
   const btnAdmin = document.getElementById('btnRefreshAdmin');
-  if (btn1) { btn1.disabled = true; btn1.innerText = '⏳ กำลังดึงข้อมูล...'; }
-  if (btnAdmin) { btnAdmin.disabled = true; btnAdmin.innerText = '⏳ กำลังดึงข้อมูล...'; }
+  // auto-refresh ทำงานเงียบๆ — ไม่แตะสถานะปุ่มที่ผู้ใช้เห็น
+  if (!skipGrid) {
+    if (btn1) { btn1.disabled = true; btn1.innerText = '⏳ กำลังดึงข้อมูล...'; }
+    if (btnAdmin) { btnAdmin.disabled = true; btnAdmin.innerText = '⏳ กำลังดึงข้อมูล...'; }
+  }
 
   // ตอน refresh ปกติ ดึงข้อมูลตารางมาพร้อมกันในครั้งเดียว (auto-refresh ไม่ดึง เพื่อกันข้อมูลพิมพ์ค้างหาย)
   const gParams = { email: currentEmail, filterStart: start, filterEnd: end, forceRefresh: String(forceRefresh === true) };
@@ -899,7 +924,7 @@ function initAppData(forceRefresh, skipGrid) {
     .then(function(res) {
       isLoading = false;
       if (btn1) { btn1.disabled = false; btn1.innerText = '🔄 Refresh Data'; }
-      if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = 'Apply Filter (Refresh)'; }
+      if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = '🔄 Apply Filter'; }
 
       if (!res) { showWarning('❌ ไม่ได้รับข้อมูลจาก Server กรุณา Refresh หน้าเว็บ'); return; }
       if (!res.success) { showWarning('❌ เกิดข้อผิดพลาด: ' + (res.error || 'Unknown error')); return; }
@@ -919,7 +944,7 @@ function initAppData(forceRefresh, skipGrid) {
     .catch(function(err) {
       isLoading = false;
       if (btn1) { btn1.disabled = false; btn1.innerText = '🔄 Refresh Data'; }
-      if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = 'Apply Filter (Refresh)'; }
+      if (btnAdmin) { btnAdmin.disabled = false; btnAdmin.innerText = '🔄 Apply Filter'; }
       showWarning('❌ เกิดข้อผิดพลาดในการโหลดข้อมูล: ' + (err.message || err));
     });
 }
@@ -936,19 +961,39 @@ function showWarning(msg) {
 }
 
 // ─── GRID DATA ───
+// สถานะการโหลดของแต่ละตาราง — ห้ามบันทึกระหว่างโหลด (กันข้อมูลเก่าถูกลบเพราะตารางยังว่าง)
+const gridBusy = { int: false, work: false };
+const __gridReq = { int: 0, work: 0 };
+
 function fetchGridData(prefix) {
   if (!currentEmail) return;
   const date = document.getElementById(`${prefix}Date`).value;
   if (!date) return;
   const type = prefix === 'int' ? 'Interview' : 'StartWork';
+  const reqId = ++__gridReq[prefix]; // ลำดับ request — คำตอบเก่าที่มาช้าจะถูกทิ้ง
+  gridBusy[prefix] = true;
   document.getElementById(`${prefix}Body`).innerHTML = `<tr><td colspan="6" class="center">⏳ กำลังดึงข้อมูลของวันที่ ${formatDateThai(date)}...</td></tr>`;
 
   gasGet('getGridData', { email: currentEmail, type, date })
-    .then(function(res) { renderGrid(prefix, res); })
-    .catch(function(err) { alert('ดึงข้อมูลล้มเหลว: ' + err.message); });
+    .then(function(res) {
+      if (reqId !== __gridReq[prefix]) return; // มี request ใหม่กว่าแล้ว — ทิ้งคำตอบนี้
+      if (!res || res.success === false || !Array.isArray(res.rows)) {
+        document.getElementById(`${prefix}Body`).innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">❌ โหลดไม่สำเร็จ: ${(res && res.error) || 'ไม่ได้รับข้อมูลจาก Server'} — เลือกวันที่อีกครั้งเพื่อลองใหม่</td></tr>`;
+        return; // gridBusy คงค้าง true → บล็อกการบันทึกจนกว่าจะโหลดสำเร็จ
+      }
+      gridBusy[prefix] = false;
+      renderGrid(prefix, res);
+    })
+    .catch(function(err) {
+      if (reqId !== __gridReq[prefix]) return;
+      document.getElementById(`${prefix}Body`).innerHTML = `<tr><td colspan="6" class="center" style="color:#dc2626;">❌ ดึงข้อมูลล้มเหลว: ${err.message} — เลือกวันที่อีกครั้งเพื่อลองใหม่</td></tr>`;
+    });
 }
 
 function renderGrid(prefix, res) {
+  res = res || {};
+  res.rows = Array.isArray(res.rows) ? res.rows : [];
+  gridBusy[prefix] = false; // ตารางอยู่ในสถานะพร้อมใช้งาน/บันทึกได้
   document.getElementById(`${prefix}Body`).innerHTML = '';
   document.getElementById(`${prefix}Remark`).value = res.remark || '';
   if (res.rows.length === 0) {
@@ -1017,6 +1062,8 @@ function getPayloadFromGrid(prefix) {
 
 // ─── SAVE ───
 function saveAllData() {
+  // ห้ามบันทึกขณะตารางกำลังโหลด/โหลดล้มเหลว — ไม่งั้นข้อมูลเดิมของวันนั้นจะถูกลบทิ้งทั้งที่ตารางยังว่าง
+  if (gridBusy.int || gridBusy.work) { alert('⏳ กำลังดึงข้อมูลตารางอยู่ กรุณารอให้โหลดเสร็จก่อนบันทึก'); return; }
   const intData = getPayloadFromGrid('int');
   const workData = getPayloadFromGrid('work');
   const btn = document.getElementById('btnSaveAll');
@@ -1027,15 +1074,21 @@ function saveAllData() {
   btn.disabled = true;
   btn.innerText = 'กำลังเซฟและอัปเดตข้อมูล...';
   gasPost('submitData', { userEmail: currentEmail, int: intData, work: workData })
-    .then(function() {
-      alert('✅ บันทึกและอัปเดตข้อมูลสำเร็จ!');
+    .then(function(res) {
+      // ต้องเช็คผลจริงจาก server — doPost ส่ง error กลับมาแบบ {success:false} เสมอ (HTTP 200)
+      if (!res || !res.success) throw new Error((res && res.error) || 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
+      let msg = '✅ บันทึกและอัปเดตข้อมูลสำเร็จ!';
+      if (res.skippedStores && res.skippedStores.length) {
+        msg += `\n\n⚠️ สาขาต่อไปนี้ไม่ถูกบันทึกเพราะไม่พบในชีต Target: ${res.skippedStores.join(', ')}`;
+      }
+      alert(msg);
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
       // loadDashboard ดึงทั้ง dashboard + ตาราง grid ให้อยู่แล้ว (false = ใช้ cache External DB, เร็วกว่า)
       loadDashboard(false);
     })
     .catch(function(err) {
-      alert('Error: ' + err.message);
+      alert('❌ บันทึกไม่สำเร็จ: ' + err.message + '\nข้อมูลที่กรอกยังอยู่ครบ กรุณาลองกดบันทึกอีกครั้ง');
       btn.disabled = false;
       btn.innerText = '💾 บันทึกข้อมูลทั้งหมด (SAVE & UPDATE DATA)';
     });
@@ -1094,7 +1147,8 @@ function processExcelUpload() {
             work: { date: dateInput.value, remark: 'File Upload (Excel)', rows: payloadRows },
             uploadFile: { name: file.name, type: file.type, data: eB64.target.result.split(',')[1] }
           })
-          .then(function() {
+          .then(function(res) {
+            if (!res || !res.success) throw new Error((res && res.error) || 'บันทึกไม่สำเร็จ กรุณาลองใหม่');
             alert(`อัปโหลดสำเร็จ ${payloadRows.length} สาขา!`);
             fileInput.value = '';
             btn.disabled = false;
@@ -1458,6 +1512,10 @@ function exportAdminData() {
     .then(function(res) {
       btn.disabled = false;
       btn.innerText = '📥 Export Excel (Admin)';
+      if (!res || !res.url) {
+        fallbackDiv.innerHTML = `<span style="color:#dc2626; font-weight:bold;">❌ สร้างไฟล์ไม่สำเร็จ: ${(res && res.error) || 'Unknown error'}</span>`;
+        return;
+      }
       const url = res.url;
       const win = window.open(url, '_blank');
       if (!win || win.closed || typeof win.closed === 'undefined') {

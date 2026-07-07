@@ -1,5 +1,7 @@
 const SPREADSHEET_ID = '1xuu1ibhlTuEmS2fhvtvdW9FY2lh2Ic_F9qsSHgyvYlc';
 const MANPOWER_DB_ID = '1Wn1gnstzG_2Wi_Tc95cw0rIC1dIoHJvHbghlxceJy9A';
+// Timezone คงที่ของระบบ — กันวันที่เพี้ยนหนึ่งวันเมื่อ timezone ของ script ไม่ตรงกับ spreadsheet
+const APP_TZ = 'Asia/Bangkok';
 const TARGET_SHEET_NAME = 'Target';
 const WEEKLY_UPDATE_SHEET_NAME = 'Weekly_Update';
 const USER_SHEET_NAME = 'Users';
@@ -104,31 +106,74 @@ function ensureNameListSheet_(ss) {
   return sheet;
 }
 
-// ดึงรายชื่อ — vendor เห็นเฉพาะของตนเอง, admin เห็นทั้งหมด
+// ชื่อแท็บของแต่ละ vendor เช่น "NameList_The First Good Man" (ตัดอักขระต้องห้ามของชื่อชีตออก)
+function vendorSheetName_(vendor) {
+  const clean = String(vendor || '').replace(/[\[\]\*\/\\\?:]/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 80);
+  return 'NameList_' + (clean || 'Unknown');
+}
+
+// สร้าง/ดึงแท็บ Name List ของ vendor นั้นๆ (แยก vendor คนละแท็บ)
+function ensureVendorNameListSheet_(ss, vendor) {
+  const name = vendorSheetName_(vendor);
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.getRange(1, 1, 1, NAMELIST_HEADERS.length).setValues([NAMELIST_HEADERS])
+      .setFontWeight('bold').setBackground('#1e293b').setFontColor('white');
+    sheet.setFrozenRows(1);
+    // dropdown สถานะในคอลัมน์ Status (B) — แก้ตรงในชีตก็สะดวก
+    const dv = SpreadsheetApp.newDataValidation().requireValueInList(NAMELIST_STATUSES, true).setAllowInvalid(false).build();
+    sheet.getRange(2, NL.status + 1, 500, 1).setDataValidation(dv);
+  }
+  return sheet;
+}
+
+// อ่านรายชื่อจากชีตหนึ่ง → append ลง out (กรองตามสิทธิ์)
+function collectNameRows_(sheet, user, out) {
+  const values = sheet.getDataRange().getValues();
+  const sheetName = sheet.getName();
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    const agency = String(r[NL.agency] || '').trim();
+    const nameTH = String(r[NL.nameTH] || '').trim();
+    const nameEN = String(r[3] || '').trim();
+    if (!nameTH && !nameEN) continue; // ข้ามแถวว่าง
+    if (!user.isAdmin && agency !== user.vendor) continue; // vendor เห็นเฉพาะของตนเอง
+    out.push({
+      sheet:     sheetName,
+      rowIndex:  i + 1,
+      agency:    agency,
+      name:      nameTH || nameEN,
+      storeNo:   String(r[NL.storeNo] || ''),
+      branch:    String(r[NL.branch] || ''),
+      position:  String(r[NL.position] || ''),
+      startDate: normalizeDate_(r[NL.startDate]),
+      status:    String(r[NL.status] || NAMELIST_STATUSES[0])
+    });
+  }
+}
+
+// ดึงรายชื่อ — vendor เห็นเฉพาะแท็บของตนเอง, admin เห็นทุกแท็บ NameList_*
 function getNameListAPI(email) {
   try {
     const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
     const user = loginUserOnly(email).user;
-    const sheet = ensureNameListSheet_(ss);
-    const values = sheet.getDataRange().getValues();
     const rows = [];
-    for (let i = 1; i < values.length; i++) {
-      const r = values[i];
-      const agency = String(r[NL.agency] || '').trim();
-      const nameTH = String(r[NL.nameTH] || '').trim();
-      if (!agency && !nameTH) continue; // ข้ามแถวว่าง
-      if (!user.isAdmin && agency !== user.vendor) continue; // vendor เห็นเฉพาะของตนเอง
-      rows.push({
-        rowIndex:  i + 1,
-        agency:    agency,
-        name:      nameTH || String(r[3] || ''),
-        storeNo:   String(r[NL.storeNo] || ''),
-        branch:    String(r[NL.branch] || ''),
-        position:  String(r[NL.position] || ''),
-        startDate: normalizeDate_(r[NL.startDate]),
-        status:    String(r[NL.status] || NAMELIST_STATUSES[0])
+
+    if (user.isAdmin) {
+      // admin: อ่านทุกแท็บ NameList_* + แท็บรวมเดิม (ถ้ามีข้อมูลเก่าค้างอยู่)
+      ss.getSheets().forEach(s => {
+        const n = s.getName();
+        if (n.indexOf('NameList_') === 0 || n === NAMELIST_SHEET_NAME) collectNameRows_(s, user, rows);
       });
+    } else {
+      const own = ss.getSheetByName(vendorSheetName_(user.vendor));
+      if (own) collectNameRows_(own, user, rows);
+      // เผื่อมีข้อมูลเก่าของ vendor นี้ในแท็บรวมเดิม
+      const legacy = ss.getSheetByName(NAMELIST_SHEET_NAME);
+      if (legacy) collectNameRows_(legacy, user, rows);
     }
+
     return { success: true, rows: rows, isAdmin: user.isAdmin, vendor: user.vendor, statuses: NAMELIST_STATUSES };
   } catch (e) {
     return { success: false, error: e.message };
@@ -142,7 +187,8 @@ function uploadNameList(payload) {
     const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
     const user = loginUserOnly(payload.userEmail).user;
     const vendor = user.vendor;
-    const sheet = ensureNameListSheet_(ss);
+    // จัดเก็บแยกแท็บของ vendor นั้นๆ (NameList_<Vendor>)
+    const sheet = ensureVendorNameListSheet_(ss, vendor);
 
     const out = [];
     (payload.rows || []).forEach(src => {
@@ -165,26 +211,47 @@ function uploadNameList(payload) {
     });
 
     if (out.length === 0) return { success: false, error: 'ไม่พบรายชื่อในไฟล์ (คอลัมน์ชื่อว่าง)' };
-    sheet.getRange(sheet.getLastRow() + 1, 1, out.length, NL.total).setValues(out);
+    // Lock กันอัปโหลดพร้อมกันหลายคนแล้ว getLastRow ชี้แถวเดียวกัน (ข้อมูลทับกัน)
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      sheet.getRange(sheet.getLastRow() + 1, 1, out.length, NL.total).setValues(out);
+    } finally {
+      lock.releaseLock();
+    }
     return { success: true, added: out.length };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 
-// อัปเดตสถานะ — ตรวจสอบว่า vendor เป็นเจ้าของแถวก่อนแก้
+// อัปเดตสถานะ — รองรับหลายแท็บ, ตรวจสอบว่า vendor เป็นเจ้าของแถวก่อนแก้
 function updateNameListStatus(payload) {
   try {
     const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
     const user = loginUserOnly(payload.userEmail).user;
-    const sheet = ensureNameListSheet_(ss);
-    const values = sheet.getDataRange().getValues();
+    const sheetCache = {}; // อ่านค่าแต่ละชีตครั้งเดียว
     let updated = 0;
+
     (payload.updates || []).forEach(u => {
+      const shName = String(u.sheet || NAMELIST_SHEET_NAME);
+      // จำกัดให้แก้ได้เฉพาะชีตกลุ่ม Name List เท่านั้น
+      if (shName !== NAMELIST_SHEET_NAME && shName.indexOf('NameList_') !== 0) return;
+      if (!sheetCache[shName]) {
+        const sh = ss.getSheetByName(shName);
+        if (!sh) return;
+        sheetCache[shName] = { sheet: sh, values: sh.getDataRange().getValues() };
+      }
+      const { sheet, values } = sheetCache[shName];
       const idx = Number(u.rowIndex);
       if (!idx || idx < 2 || idx > values.length) return;
       const rowAgency = String(values[idx - 1][NL.agency] || '').trim();
       if (!user.isAdmin && rowAgency !== user.vendor) return; // กันแก้ของ vendor อื่น
+      // ยืนยันตัวตนแถวด้วยชื่อ — ถ้าแถวขยับ (มีการลบ/แทรกแถวในชีต) จะไม่เขียนสถานะผิดคน
+      if (u.name) {
+        const rowName = String(values[idx - 1][NL.nameTH] || '').trim() || String(values[idx - 1][3] || '').trim();
+        if (rowName && rowName !== String(u.name).trim()) return;
+      }
       let status = String(u.status || '').trim();
       if (NAMELIST_STATUSES.indexOf(status) === -1) return;
       sheet.getRange(idx, NL.status + 1).setValue(status); // Status = คอลัมน์ B
@@ -355,7 +422,7 @@ function padStoreNo_(val) {
 function normalizeDate_(val) {
   if (!val) return '';
   if (Object.prototype.toString.call(val) === '[object Date]') {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(val, APP_TZ, 'yyyy-MM-dd');
   }
   return String(val).trim();
 }
@@ -388,11 +455,28 @@ function loginUserOnly(email) {
 // ─────────────────────────────────────────────
 //  INIT APP — single bundled call after login
 // ─────────────────────────────────────────────
+// เวอร์ชันของข้อมูล — bump ทุกครั้งที่มีการบันทึก เพื่อให้ cache ผลลัพธ์เก่าหมดอายุทันที
+function getDataVersion_() {
+  return CacheService.getScriptCache().get('AEC_DATA_VER') || '0';
+}
+function bumpDataVersion_() {
+  try { CacheService.getScriptCache().put('AEC_DATA_VER', String(new Date().getTime()), 21600); } catch (e) {}
+}
+
 function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridWorkDate) {
   try {
+    // Cache ผลลัพธ์ทั้งก้อนต่อผู้ใช้+filter (หมดอายุเองเมื่อมีการบันทึกข้อมูลใหม่ ผ่าน data version)
+    const cache = CacheService.getScriptCache();
+    const ckeyRaw = [email, filterStart || '', filterEnd || '', gridIntDate || '', gridWorkDate || '', getDataVersion_()].join('|');
+    const ckey = 'INIT_' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ckeyRaw));
+    if (forceRefresh !== true) {
+      const hit = cache.get(ckey);
+      if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+    }
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const userObj = loginUserOnly(email).user;
-    const targets = getTargets_(ss);
+    const targets = getTargets_(ss, forceRefresh === true);
 
     // ใช้ cache เสมอถ้าไม่ได้ force refresh
     // เพื่อป้องกัน timeout จากการอ่าน External DB ซ้ำๆ
@@ -408,11 +492,27 @@ function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridW
     const dashboard = getDashboardDataCore_(ss, userObj, targets, extDB, filterStart || '', filterEnd || '', weeklyValues);
     const stores = targets.map(row => ({ storeNo: row.storeNo, branch: row.branch, region: row.region }));
 
+    // ลดขนาด payload ที่ส่งให้ browser:
+    // - rawUpdates ใช้เฉพาะตอน export ฝั่ง server → ไม่ต้องส่ง (ก้อนใหญ่ที่สุด ทำให้โหลดช้า)
+    // - historyRows จำกัด 300 รายการล่าสุด (พอสำหรับแสดงประวัติ)
+    delete dashboard.rawUpdates;
+    if (dashboard.historyRows && dashboard.historyRows.length > 300) {
+      dashboard.historyRows = dashboard.historyRows.slice(0, 300);
+    }
+
     // รวมข้อมูลตารางกรอก (Interview/StartWork) มาด้วยในครั้งเดียว เพื่อลดจำนวน request → โหลดเร็วขึ้น
     const gridInt  = gridIntDate  ? getExistingGridDataCore_(ss, userObj.vendor, 'Interview', gridIntDate, weeklyValues)  : null;
     const gridWork = gridWorkDate ? getExistingGridDataCore_(ss, userObj.vendor, 'StartWork', gridWorkDate, weeklyValues) : null;
 
-    return { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
+    const result = { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
+
+    // เก็บผลลัพธ์ไว้ 5 นาที (ถ้ามีการบันทึกใหม่ data version เปลี่ยน → key เปลี่ยน → คำนวณใหม่เอง)
+    try {
+      const s = JSON.stringify(result);
+      if (s.length < 95000) cache.put(ckey, s, 300);
+    } catch (e) {}
+
+    return result;
   } catch (e) {
     // ต้อง return object ไม่ใช่ throw เพื่อให้ frontend จัดการได้
     return { success: false, error: e.message };
@@ -424,12 +524,19 @@ function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridW
 //  Col: A=Store_No, B=Store_Name, C=Store_Name_TH,
 //       D=Format, E=Region, F=Vendor, G=Target
 // ─────────────────────────────────────────────
-function getTargets_(ss) {
+function getTargets_(ss, forceRefresh) {
+  // Cache 10 นาที — ชีต Target เปลี่ยนไม่บ่อย ลดเวลาอ่านทุกครั้งที่โหลด
+  const cache = CacheService.getScriptCache();
+  if (forceRefresh !== true) {
+    const hit = cache.get('AEC_TARGETS_V1');
+    if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  }
+
   const sheet = ss.getSheetByName(TARGET_SHEET_NAME);
   if (!sheet) return [];
   const values = sheet.getDataRange().getValues();
   // skip header row (row[0] = 'Store_No' text)
-  return values.filter(r => r[0] !== '' && !isNaN(Number(r[0])) && String(r[0]).trim() !== '').map(r => ({
+  const out = values.filter(r => r[0] !== '' && !isNaN(Number(r[0])) && String(r[0]).trim() !== '').map(r => ({
     storeNo: padStoreNo_(r[0]),          // "001"
     branch: String(r[1] || ''),
     branchTH: String(r[2] || ''),
@@ -437,6 +544,12 @@ function getTargets_(ss) {
     mainVendor: String(r[5] || '').trim(),
     totalTarget: Number(String(r[6] || '0').replace(/,/g, '')) || 0
   }));
+
+  try {
+    const s = JSON.stringify(out);
+    if (s.length < 95000) cache.put('AEC_TARGETS_V1', s, 600);
+  } catch (e) {}
+  return out;
 }
 
 // ─────────────────────────────────────────────
@@ -756,74 +869,85 @@ function getExistingGridDataCore_(ss, vendor, type, targetDate, preValues) {
 //  SUBMIT DATA
 // ─────────────────────────────────────────────
 function submitCombinedData(payload) {
-  const ss          = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const currentUser = loginUserOnly(payload.userEmail).user;
-  const vendor      = currentUser.vendor;
-  const targets     = getTargets_(ss);
-  const timestamp   = new Date();
+  // Lock กันหลายคนบันทึกพร้อมกัน — ไม่งั้น deleteRow ด้วย index เก่าจะลบผิดแถว/ข้อมูลทับกัน
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const ss          = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const currentUser = loginUserOnly(payload.userEmail).user;
+    const vendor      = currentUser.vendor;
+    const targets     = getTargets_(ss, true); // อ่านสดเสมอ — สาขาที่เพิ่งเพิ่มใน Target ต้องบันทึกได้ทันที
+    const timestamp   = new Date();
 
-  const sheet = ss.getSheetByName(WEEKLY_UPDATE_SHEET_NAME)
-    || ss.getSheets().find(s => s.getName().toLowerCase() === WEEKLY_UPDATE_SHEET_NAME.toLowerCase());
+    const sheet = ss.getSheetByName(WEEKLY_UPDATE_SHEET_NAME)
+      || ss.getSheets().find(s => s.getName().toLowerCase() === WEEKLY_UPDATE_SHEET_NAME.toLowerCase());
 
-  const intDate  = payload.int  && payload.int.date  ? normalizeDate_(payload.int.date)  : null;
-  const workDate = payload.work && payload.work.date ? normalizeDate_(payload.work.date) : null;
+    const intDate  = payload.int  && payload.int.date  ? normalizeDate_(payload.int.date)  : null;
+    const workDate = payload.work && payload.work.date ? normalizeDate_(payload.work.date) : null;
 
-  // Delete existing rows for same vendor+date+type (upsert)
-  const values = sheet.getDataRange().getValues();
-  for (let i = values.length - 1; i >= 1; i--) {
-    const rDate   = normalizeDate_(values[i][1]);
-    const rVendor = String(values[i][7]).trim();
-    const rType   = String(values[i][8]).trim();
-    const del = (payload.int  && intDate  && rVendor === vendor && rType === 'Interview' && rDate === intDate)
-             || (payload.work && workDate && rVendor === vendor && rType === 'StartWork' && rDate === workDate);
-    if (del) sheet.deleteRow(i + 1);
-  }
+    // เตรียมแถวใหม่ + ตรวจสาขา "ก่อน" ลบข้อมูลเดิม — สาขาที่ไม่พบใน Target จะถูกรายงานกลับ ไม่หายเงียบ
+    const rowsToAppend = [];
+    const skippedStores = [];
 
-  // Save uploaded file to Drive
-  if (payload.uploadFile && payload.uploadFile.data) {
-    try {
-      const folder   = DriveApp.getFolderById('1kEkuRP2QMs_Pws4hIGEJs6tYyrlmGiHG');
-      const fileBlob = Utilities.newBlob(
-        Utilities.base64Decode(payload.uploadFile.data),
-        payload.uploadFile.type,
-        payload.uploadFile.name
-      );
-      fileBlob.setName(vendor + '_' + Utilities.formatDate(timestamp, Session.getScriptTimeZone(), 'yyyyMMdd') + '_' + payload.uploadFile.name);
-      folder.createFile(fileBlob);
-    } catch (e) {}
-  }
-
-  const rowsToAppend = [];
-
-  function processRows(dataObj, type) {
-    if (!dataObj || !dataObj.rows || dataObj.rows.length === 0) return;
-    const actionDate = normalizeDate_(dataObj.date);
-    dataObj.rows.forEach(r => {
-      const storeNo   = padStoreNo_(r.storeNo);
-      const targetRow = targets.find(t => t.storeNo === storeNo);
-      if (!targetRow || !storeNo) return;
-      [{ pos: 'ล่าม', qty: r.lam }, { pos: 'Bakery', qty: r.bak }, { pos: 'Other', qty: r.oth }].forEach(p => {
-        if (p.qty > 0) {
-          rowsToAppend.push([
-            timestamp, actionDate, storeNo, targetRow.branch, targetRow.branchTH,
-            targetRow.region, targetRow.mainVendor, vendor, type,
-            p.pos,
-            type === 'Interview'  ? p.qty : 0,
-            type === 'StartWork'  ? p.qty : 0,
-            dataObj.remark || '', currentUser.email
-          ]);
-        }
+    function processRows(dataObj, type) {
+      if (!dataObj || !dataObj.rows || dataObj.rows.length === 0) return;
+      const actionDate = normalizeDate_(dataObj.date);
+      dataObj.rows.forEach(r => {
+        const storeNo   = padStoreNo_(r.storeNo);
+        const targetRow = targets.find(t => t.storeNo === storeNo);
+        if (!storeNo) return;
+        if (!targetRow) { skippedStores.push(storeNo); return; }
+        [{ pos: 'ล่าม', qty: r.lam }, { pos: 'Bakery', qty: r.bak }, { pos: 'Other', qty: r.oth }].forEach(p => {
+          if (p.qty > 0) {
+            rowsToAppend.push([
+              timestamp, actionDate, storeNo, targetRow.branch, targetRow.branchTH,
+              targetRow.region, targetRow.mainVendor, vendor, type,
+              p.pos,
+              type === 'Interview'  ? p.qty : 0,
+              type === 'StartWork'  ? p.qty : 0,
+              dataObj.remark || '', currentUser.email
+            ]);
+          }
+        });
       });
-    });
-  }
+    }
 
-  if (payload.int)  processRows(payload.int,  'Interview');
-  if (payload.work) processRows(payload.work, 'StartWork');
+    if (payload.int)  processRows(payload.int,  'Interview');
+    if (payload.work) processRows(payload.work, 'StartWork');
 
-  if (rowsToAppend.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    // Delete existing rows for same vendor+date+type (upsert)
+    const values = sheet.getDataRange().getValues();
+    for (let i = values.length - 1; i >= 1; i--) {
+      const rDate   = normalizeDate_(values[i][1]);
+      const rVendor = String(values[i][7]).trim();
+      const rType   = String(values[i][8]).trim();
+      const del = (payload.int  && intDate  && rVendor === vendor && rType === 'Interview' && rDate === intDate)
+               || (payload.work && workDate && rVendor === vendor && rType === 'StartWork' && rDate === workDate);
+      if (del) sheet.deleteRow(i + 1);
+    }
+
+    // Save uploaded file to Drive
+    if (payload.uploadFile && payload.uploadFile.data) {
+      try {
+        const folder   = DriveApp.getFolderById('1kEkuRP2QMs_Pws4hIGEJs6tYyrlmGiHG');
+        const fileBlob = Utilities.newBlob(
+          Utilities.base64Decode(payload.uploadFile.data),
+          payload.uploadFile.type,
+          payload.uploadFile.name
+        );
+        fileBlob.setName(vendor + '_' + Utilities.formatDate(timestamp, APP_TZ, 'yyyyMMdd') + '_' + payload.uploadFile.name);
+        folder.createFile(fileBlob);
+      } catch (e) {}
+    }
+
+    if (rowsToAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    }
+    bumpDataVersion_(); // ให้ cache ผลลัพธ์เก่าหมดอายุ — ทุกคนเห็นข้อมูลใหม่ทันที
+    return { success: true, skippedStores: skippedStores };
+  } finally {
+    lock.releaseLock();
   }
-  return { success: true };
 }
 
 // ─────────────────────────────────────────────
@@ -832,7 +956,7 @@ function submitCombinedData(payload) {
 function getDashboardDataAPI(email, filterStart, filterEnd, forceRefresh) {
   const ss      = SpreadsheetApp.openById(SPREADSHEET_ID);
   const userObj = loginUserOnly(email).user;
-  const targets = getTargets_(ss);
+  const targets = getTargets_(ss, forceRefresh === true);
   const extDB   = getExternalDBData_(forceRefresh === true);
   return getDashboardDataCore_(ss, userObj, targets, extDB, filterStart, filterEnd);
 }
@@ -842,7 +966,7 @@ function getDashboardDataAPI(email, filterStart, filterEnd, forceRefresh) {
 // ─────────────────────────────────────────────
 function exportAdminExcelAPI(userEmail, filterStart, filterEnd) {
   const data       = getDashboardDataAPI(userEmail, filterStart, filterEnd, false);
-  const exportFile = SpreadsheetApp.create('AEC_Admin_Report_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss'));
+  const exportFile = SpreadsheetApp.create('AEC_Admin_Report_' + Utilities.formatDate(new Date(), APP_TZ, 'yyyyMMdd_HHmmss'));
 
   const s1 = exportFile.getActiveSheet();
   s1.setName('All Branches Summary');
@@ -884,7 +1008,7 @@ function exportAdminExcelAPI(userEmail, filterStart, filterEnd) {
 
 function exportExcelAPI(userEmail) {
   const data       = getDashboardDataAPI(userEmail, '', '', false);
-  const exportFile = SpreadsheetApp.create('AEC_Export_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss'));
+  const exportFile = SpreadsheetApp.create('AEC_Export_' + Utilities.formatDate(new Date(), APP_TZ, 'yyyyMMdd_HHmmss'));
   const s1         = exportFile.getActiveSheet();
   s1.setName('All Branches');
   const h1 = ['Store No','Branch','Region','Main Vendor','Target','Passed','Started','Remaining','Progress'];
