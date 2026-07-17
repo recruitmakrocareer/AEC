@@ -465,15 +465,8 @@ function bumpDataVersion_() {
 
 function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridWorkDate) {
   try {
-    // Cache ผลลัพธ์ทั้งก้อนต่อผู้ใช้+filter (หมดอายุเองเมื่อมีการบันทึกข้อมูลใหม่ ผ่าน data version)
-    const cache = CacheService.getScriptCache();
-    const ckeyRaw = [email, filterStart || '', filterEnd || '', gridIntDate || '', gridWorkDate || '', getDataVersion_()].join('|');
-    const ckey = 'INIT_' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, ckeyRaw));
-    if (forceRefresh !== true) {
-      const hit = cache.get(ckey);
-      if (hit) { try { return JSON.parse(hit); } catch (e) {} }
-    }
-
+    // NOTE: ไม่ cache ผลลัพธ์ทั้งก้อนอีกต่อไป — เพื่อให้ข้อมูลที่ vendor เพิ่งคีย์ ขึ้นทันทีเสมอ
+    // (ความเร็วยังดีเพราะ: อ่าน Weekly ครั้งเดียว + cache External DB/Target + ลดขนาด payload)
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const userObj = loginUserOnly(email).user;
     const targets = getTargets_(ss, forceRefresh === true);
@@ -504,15 +497,7 @@ function initApp(email, filterStart, filterEnd, forceRefresh, gridIntDate, gridW
     const gridInt  = gridIntDate  ? getExistingGridDataCore_(ss, userObj.vendor, 'Interview', gridIntDate, weeklyValues)  : null;
     const gridWork = gridWorkDate ? getExistingGridDataCore_(ss, userObj.vendor, 'StartWork', gridWorkDate, weeklyValues) : null;
 
-    const result = { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
-
-    // เก็บผลลัพธ์ไว้ 5 นาที (ถ้ามีการบันทึกใหม่ data version เปลี่ยน → key เปลี่ยน → คำนวณใหม่เอง)
-    try {
-      const s = JSON.stringify(result);
-      if (s.length < 95000) cache.put(ckey, s, 300);
-    } catch (e) {}
-
-    return result;
+    return { success: true, user: userObj, dashboard: dashboard, stores: stores, gridInt: gridInt, gridWork: gridWork };
   } catch (e) {
     // ต้อง return object ไม่ใช่ throw เพื่อให้ frontend จัดการได้
     return { success: false, error: e.message };
@@ -760,6 +745,34 @@ function getDashboardDataCore_(ss, currentUser, targets, extDB, filterStart, fil
     qty:        Number(r['interview passed'] || 0) + Number(r['started work'] || 0),
     remark:     String(r['remark']        || '')
   })).reverse();
+
+  // ── Store × Vendor matrix (admin only) — สาขาไหนมีพนักงานจาก vendor เจ้าไหน กี่คน ──
+  let storeVendorRows = [];
+  let storeVendorCols = [];
+  if (currentUser.isAdmin) {
+    const targetInfo = {};
+    targets.forEach(t => { targetInfo[t.storeNo] = { branch: t.branch, region: t.region }; });
+    const svMap = {};
+    const vendorSet = {};
+    filteredUpdates.forEach(r => {
+      if (String(r['type'] || '').trim() !== 'StartWork') return;
+      const qty = Number(r['started work'] || 0);
+      if (qty <= 0) return;
+      const s = padStoreNo_(r['store no']);
+      const v = String(r['update vendor'] || '').trim() || 'Unknown';
+      if (!svMap[s]) svMap[s] = {};
+      svMap[s][v] = (svMap[s][v] || 0) + qty;
+      vendorSet[v] = true;
+    });
+    storeVendorCols = Object.keys(vendorSet).sort();
+    storeVendorRows = Object.keys(svMap).sort().map(s => {
+      const byVendor = svMap[s];
+      let total = 0;
+      storeVendorCols.forEach(v => { total += byVendor[v] || 0; });
+      const info = targetInfo[s] || { branch: '', region: '' };
+      return { storeNo: s, branch: info.branch, region: info.region, byVendor: byVendor, total: total };
+    });
+  }
 
   // ── Region & Vendor rows (admin only) ──
   let regionRows = [];
